@@ -55,3 +55,72 @@ sequenceDiagram
 Kerberos ensures that user credentials are never sent over the network, and authentication is based on the possession of valid tickets. The KDC does not keep session state, relying on the validity of the TGT and TGS for access control.
 
 --- 
+
+## DNS
+
+Active Directory Domain Services (AD DS) relies on DNS to:
+- Allow clients (workstations, servers) to locate Domain Controllers (DCs)
+- Enable DCs to communicate with each other
+- Resolve hostnames to IP addresses within internal networks
+
+**Key Points:**
+- AD maintains a DNS database with service records (SRV) for locating services (e.g., file servers, printers, DCs)
+- Dynamic DNS updates entries automatically when IP addresses change
+- If DNS records are incorrect, clients cannot locate or communicate with resources
+- DNS uses UDP port 53 (default) and TCP port 53 (for large messages)
+
+### How DNS Works in AD
+1. Client joins the network and queries DNS for a Domain Controller
+2. DNS returns an SRV record with the DC's hostname
+3. Client queries DNS for the DC's IP address
+4. Client communicates with the DC using the resolved IP
+
+### Example: Forward DNS Lookup
+```powershell
+PS C:\htb> nslookup INLANEFREIGHT.LOCAL
+
+Server:  172.16.6.5
+Address:  172.16.6.5
+
+Name:    INLANEFREIGHT.LOCAL
+Address:  172.16.6.5
+```
+
+### Example: Reverse DNS Lookup
+```powershell
+PS C:\htb> nslookup 172.16.6.5
+
+Server:  172.16.6.5
+Address:  172.16.6.5
+
+Name:    ACADEMY-EA-DC01.INLANEFREIGHT.LOCAL
+Address:  172.16.6.5
+```
+
+### Example: Finding IP Address of a Host
+```powershell
+PS C:\htb> nslookup ACADEMY-EA-DC01
+
+Server:   172.16.6.5
+Address:  172.16.6.5
+
+Name:    ACADEMY-EA-DC01.INLANEFREIGHT.LOCAL
+Address:  172.16.6.5
+```
+
+### Mermaid Diagram: DNS Request Process
+```mermaid
+sequenceDiagram
+    participant User
+    participant DNS as DNS Server
+    participant Server
+
+    User->>DNS: Query for inlanefreight.com
+    DNS-->>User: IP 134.209.24.248
+    User->>Server: HTTP request to 134.209.24.248
+    Server-->>User: Response
+```
+
+DNS is critical for AD functionality. Without proper DNS configuration, clients and services cannot reliably locate or communicate with each other in the domain.
+
+--- 
