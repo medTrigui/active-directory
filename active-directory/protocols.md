@@ -5,14 +5,14 @@ This document covers the protocols used in Active Directory.
 ## Overview
 
 Active Directory relies on four main protocols:
-- **Kerberos**: Authentication protocol
-- **DNS**: Name resolution and service location
-- **LDAP**: Directory access and management
-- **MSRPC**: Remote procedure calls for client-server communication
+- <span style="color:#0074D9"><b>Kerberos</b></span>: Authentication protocol
+- <span style="color:#2ECC40"><b>DNS</b></span>: Name resolution and service location
+- <span style="color:#FF851B"><b>LDAP</b></span>: Directory access and management
+- <span style="color:#B10DC9"><b>MSRPC</b></span>: Remote procedure calls for client-server communication
 
 ---
 
-## Kerberos
+## <span style="color:#0074D9">Kerberos</span>
 
 Kerberos is the default authentication protocol for domain accounts since Windows 2000. It is an open standard, enabling interoperability with other systems. Kerberos uses mutual authentication and is stateless, relying on tickets rather than transmitting user passwords over the network.
 
@@ -54,9 +54,9 @@ sequenceDiagram
 
 Kerberos ensures that user credentials are never sent over the network, and authentication is based on the possession of valid tickets. The KDC does not keep session state, relying on the validity of the TGT and TGS for access control.
 
---- 
+---
 
-## DNS
+## <span style="color:#2ECC40">DNS</span>
 
 Active Directory Domain Services (AD DS) relies on DNS to:
 - Allow clients (workstations, servers) to locate Domain Controllers (DCs)
@@ -123,9 +123,9 @@ sequenceDiagram
 
 DNS is critical for AD functionality. Without proper DNS configuration, clients and services cannot reliably locate or communicate with each other in the domain.
 
---- 
+---
 
-## LDAP
+## <span style="color:#FF851B">LDAP</span>
 
 Lightweight Directory Access Protocol (LDAP) is an open, cross-platform protocol used for directory lookups and authentication in Active Directory (AD) and other directory services. LDAP is essential for querying and managing directory information in AD environments.
 
@@ -164,9 +164,9 @@ sequenceDiagram
 
 LDAP is fundamental for both authentication and directory lookups in AD. Secure LDAP (LDAPS) is recommended to protect credentials and sensitive data in transit.
 
---- 
+---
 
-## MSRPC
+## <span style="color:#B10DC9">MSRPC</span>
 
 Microsoft Remote Procedure Call (MSRPC) is Microsoft's implementation of the Remote Procedure Call (RPC) protocol, enabling interprocess communication for client-server applications. MSRPC is fundamental for Windows systems to access and manage resources in Active Directory (AD).
 
@@ -179,19 +179,19 @@ Microsoft Remote Procedure Call (MSRPC) is Microsoft's implementation of the Rem
 
 | Interface   | Description |
 |-------------|-------------|
-| **lsarpc**  | RPC calls to the Local Security Authority (LSA) for managing local/domain security policy, audit policy, and interactive authentication. Used for domain security management. |
-| **netlogon**| Authenticates users and services in the domain. Runs as a background service to support domain logons. |
-| **samr**    | Remote Security Account Manager (SAM) protocol for managing the domain account database (users, groups, computers). Used for CRUD operations on security principals. Can be abused for domain reconnaissance. |
-| **drsuapi** | Directory Replication Service (DRS) Remote Protocol for replication tasks between Domain Controllers. Can be abused to extract the NTDS.dit database and retrieve password hashes. |
+| <b>lsarpc</b>  | RPC calls to the Local Security Authority (LSA) for managing local/domain security policy, audit policy, and interactive authentication. Used for domain security management. |
+| <b>netlogon</b>| Authenticates users and services in the domain. Runs as a background service to support domain logons. |
+| <b>samr</b>    | Remote Security Account Manager (SAM) protocol for managing the domain account database (users, groups, computers). Used for CRUD operations on security principals. Can be abused for domain reconnaissance. |
+| <b>drsuapi</b> | Directory Replication Service (DRS) Remote Protocol for replication tasks between Domain Controllers. Can be abused to extract the NTDS.dit database and retrieve password hashes. |
 
 **Security Note:**
 - By default, all authenticated users can query some MSRPC interfaces (e.g., samr), which can be abused for reconnaissance. Restricting access via registry settings is recommended.
 
 MSRPC is critical for AD operations, but its interfaces can be leveraged by attackers for enumeration and lateral movement if not properly secured.
 
---- 
+---
 
-## NTLM Authentication
+## <span style="color:#111111;background:#FFD700;padding:2px 8px;border-radius:4px;">NTLM Authentication</span>
 
 NTLM (NT LAN Manager) authentication is a suite of Microsoft security protocols intended to provide authentication, integrity, and confidentiality to users. While Kerberos is preferred, NTLM is still widely used and can be abused if not properly managed.
 
