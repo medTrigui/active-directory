@@ -165,3 +165,28 @@ sequenceDiagram
 LDAP is fundamental for both authentication and directory lookups in AD. Secure LDAP (LDAPS) is recommended to protect credentials and sensitive data in transit.
 
 --- 
+
+## MSRPC
+
+Microsoft Remote Procedure Call (MSRPC) is Microsoft's implementation of the Remote Procedure Call (RPC) protocol, enabling interprocess communication for client-server applications. MSRPC is fundamental for Windows systems to access and manage resources in Active Directory (AD).
+
+**Key Points:**
+- MSRPC enables communication between clients and servers in AD environments
+- Used for authentication, management, and replication tasks
+- Operates over dynamic ports (TCP 135 for endpoint mapping, then high ports for actual communication)
+
+### Key MSRPC Interfaces in AD
+
+| Interface   | Description |
+|-------------|-------------|
+| **lsarpc**  | RPC calls to the Local Security Authority (LSA) for managing local/domain security policy, audit policy, and interactive authentication. Used for domain security management. |
+| **netlogon**| Authenticates users and services in the domain. Runs as a background service to support domain logons. |
+| **samr**    | Remote Security Account Manager (SAM) protocol for managing the domain account database (users, groups, computers). Used for CRUD operations on security principals. Can be abused for domain reconnaissance. |
+| **drsuapi** | Directory Replication Service (DRS) Remote Protocol for replication tasks between Domain Controllers. Can be abused to extract the NTDS.dit database and retrieve password hashes. |
+
+**Security Note:**
+- By default, all authenticated users can query some MSRPC interfaces (e.g., samr), which can be abused for reconnaissance. Restricting access via registry settings is recommended.
+
+MSRPC is critical for AD operations, but its interfaces can be leveraged by attackers for enumeration and lateral movement if not properly secured.
+
+--- 
