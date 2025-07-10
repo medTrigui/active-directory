@@ -190,3 +190,82 @@ Microsoft Remote Procedure Call (MSRPC) is Microsoft's implementation of the Rem
 MSRPC is critical for AD operations, but its interfaces can be leveraged by attackers for enumeration and lateral movement if not properly secured.
 
 --- 
+
+## NTLM Authentication
+
+NTLM (NT LAN Manager) authentication is a suite of Microsoft security protocols intended to provide authentication, integrity, and confidentiality to users. While Kerberos is preferred, NTLM is still widely used and can be abused if not properly managed.
+
+**Key Points:**
+- Includes LM, NTLM, NTLMv1, and NTLMv2
+- Used when Kerberos is unavailable or unsupported
+- Challenge-response protocol (no mutual authentication)
+- Vulnerable to pass-the-hash, relay, and brute-force attacks
+
+### Hash/Protocol Comparison
+| Hash/Protocol | Crypto Technique | Mutual Auth | Message Type | Trusted Third Party |
+|---------------|-----------------|-------------|--------------|---------------------|
+| NTLM          | Symmetric key   | No          | Random num   | Domain Controller   |
+| NTLMv1        | Symmetric key   | No          | MD4, random  | Domain Controller   |
+| NTLMv2        | Symmetric key   | No          | MD4, random  | Domain Controller   |
+| Kerberos      | Symmetric & asymmetric | Yes   | Encrypted ticket | KDC/DC         |
+
+### LM (LAN Manager) Hashes
+- Oldest Windows password storage mechanism (pre-Vista/Server 2008)
+- Weak: passwords limited to 14 chars, not case sensitive, split into 2 chunks, easy to crack
+- Disabled by default on modern systems, but may still be found in legacy environments
+
+### NT Hash (NTLM)
+- Used in modern Windows systems
+- MD4 hash of the UTF-16-LE password
+- Stored in SAM (local) or NTDS.DIT (domain)
+- Used in challenge-response authentication (NEGOTIATE, CHALLENGE, AUTHENTICATE messages)
+- Vulnerable to pass-the-hash attacks
+
+**Example NTLM Hash:**
+```
+Rachel:500:aad3c435b514a4eeaad3b935b51304fe:e46b9e548fa0d122de7f59fb6d48eaa2:::
+```
+- Username: Rachel
+- RID: 500 (Administrator)
+- LM hash: aad3c435b514a4eeaad3b935b51304fe
+- NT hash: e46b9e548fa0d122de7f59fb6d48eaa2
+
+### NTLM Authentication Protocol
+1. Client sends NEGOTIATE_MESSAGE to server
+2. Server responds with CHALLENGE_MESSAGE
+3. Client replies with AUTHENTICATE_MESSAGE
+4. Server validates and grants/denies access
+
+### NTLMv1 (Net-NTLMv1)
+- Challenge/response using NT and LM hash
+- Server sends 8-byte challenge, client returns 24-byte response
+- Vulnerable to offline cracking and relay attacks
+
+**Example NTLMv1 Hash:**
+```
+u4-netntlm::kNS:338d08f8e26de93300000000000000000000000000000000:9526fb8c23a90751cdd619b6cea564742e1e4bf33006ba41:cb8086049ec4736c
+```
+
+### NTLMv2 (Net-NTLMv2)
+- Default since Windows 2000
+- Uses HMAC-MD5, includes client/server challenge, timestamp, and domain name
+- More resistant to spoofing and replay attacks
+
+**Example NTLMv2 Hash:**
+```
+admin::N46iSNekpT:08ca45b7d7ea58ee:88dcbe4446168966a153a0064958dac6:5c7830315c7830310000000000000b45c67103d07d7b95acd12ffa11230e0000000052920b85f78d013c31cdb3b92f5d765c783030
+```
+
+### Domain Cached Credentials (MSCache2)
+- Used when a domain-joined host cannot contact a Domain Controller
+- Stores last 10 hashes for users who logged in
+- Hashes stored in Windows registry (HKEY_LOCAL_MACHINE\SECURITY\Cache)
+- Slow to crack, not usable for pass-the-hash
+- Format: `$DCC2$10240#username#hash`
+
+**Security Note:**
+- Neither LM nor NTLM uses a salt
+- NTLM is vulnerable to pass-the-hash, relay, and brute-force attacks
+- Use Kerberos and disable LM/NTLM where possible
+
+--- 
