@@ -124,3 +124,44 @@ sequenceDiagram
 DNS is critical for AD functionality. Without proper DNS configuration, clients and services cannot reliably locate or communicate with each other in the domain.
 
 --- 
+
+## LDAP
+
+Lightweight Directory Access Protocol (LDAP) is an open, cross-platform protocol used for directory lookups and authentication in Active Directory (AD) and other directory services. LDAP is essential for querying and managing directory information in AD environments.
+
+**Key Points:**
+- LDAP is used for authentication and directory queries in AD
+- Latest version: LDAPv3 (RFC 4511)
+- Default port: 389 (LDAP), 636 (LDAPS/LDAP over SSL)
+- AD Domain Controllers listen for LDAP requests
+- LDAP is the "language" applications use to communicate with directory servers
+
+### How LDAP Works in AD
+- AD stores user and security information, accessible via LDAP
+- Applications and systems use LDAP to query and update directory data
+- LDAP sessions start by connecting to a Directory System Agent (usually a Domain Controller)
+
+**Analogy:**
+- AD : LDAP :: Apache : HTTP (AD is the server, LDAP is the protocol)
+
+### LDAP Authentication
+- **Simple Authentication:** Username/password sent in a BIND request (can be anonymous, unauthenticated, or authenticated)
+- **SASL Authentication:** Uses the Simple Authentication and Security Layer framework to support other authentication methods (e.g., Kerberos)
+- LDAP messages are cleartext by default—use TLS/SSL for security
+
+### Mermaid Diagram: LDAP Query Process
+```mermaid
+sequenceDiagram
+    participant ClientApp as Client Application
+    participant APIGW as API Gateway
+    participant AD as Active Directory (LDAP)
+
+    ClientApp->>APIGW: Request user info
+    APIGW->>AD: LDAP query (BIND, search)
+    AD-->>APIGW: User info
+    APIGW-->>ClientApp: User info
+```
+
+LDAP is fundamental for both authentication and directory lookups in AD. Secure LDAP (LDAPS) is recommended to protect credentials and sensitive data in transit.
+
+--- 
