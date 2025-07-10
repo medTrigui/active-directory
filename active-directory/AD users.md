@@ -98,4 +98,88 @@ flowchart TD
 
 ---
 
+## Active Directory Groups
+
+Groups are a fundamental object in Active Directory (AD) used to organize users, computers, and other objects for easier management and permission assignment. Groups can simplify administration, but if not managed carefully, can lead to excessive or unintended privileges.
+
+### Groups vs. Organizational Units (OUs)
+- **Groups:** Used to assign permissions to access resources. Membership determines access rights.
+- **OUs:** Used to organize objects for management and apply Group Policy. Can delegate admin tasks without granting extra rights via group membership.
+
+---
+
+### Types of Groups
+| Group Type      | Purpose                                                                                   |
+|-----------------|------------------------------------------------------------------------------------------|
+| Security        | Assign permissions/rights to users and computers for resources (files, printers, etc.).   |
+| Distribution    | Used by email applications (e.g., Exchange) to distribute messages; not for permissions.  |
+
+---
+
+### Group Scopes
+| Scope         | Description                                                                                 |
+|---------------|--------------------------------------------------------------------------------------------|
+| Domain Local  | Manage permissions to resources in the same domain; can include users from other domains.   |
+| Global        | Can be used in any domain, but only contains users from its own domain.                     |
+| Universal     | Used across multiple domains in a forest; can contain users/groups from any domain.         |
+
+---
+
+### Example: Group Scopes in AD
+```powershell
+PS C:\htb> Get-ADGroup  -Filter * |select samaccountname,groupscope
+
+samaccountname                           groupscope
+--------------                           ----------
+Administrators                          DomainLocal
+Users                                   DomainLocal
+Guests                                  DomainLocal
+Domain Computers                             Global
+Domain Controllers                           Global
+Schema Admins                             Universal
+Enterprise Admins                         Universal
+Domain Admins                                Global
+Domain Users                                 Global
+Domain Guests                                Global
+```
+
+---
+
+### Built-in vs. Custom Groups
+- **Built-in Groups:** Created by default for administrative purposes (e.g., Administrators, Users, Guests). Usually Domain Local scope.
+- **Custom Groups:** Created by organizations for specific needs. Can be security or distribution, and any scope.
+
+---
+
+### Nested Group Membership
+Groups can be members of other groups (nesting), which can lead to inherited privileges. This can make it difficult to audit effective permissions. Tools like BloodHound help visualize and analyze nested group relationships.
+
+#### Visual: Nested Group Membership
+```mermaid
+flowchart TD
+    DCorner[User: DCORNER]
+    HelpDesk[Group: HELP DESK]
+    HelpDeskL1[Group: HELP DESK LEVEL 1]
+    Tier1Admins[Group: TIER 1 ADMINS]
+
+    DCorner --> HelpDesk
+    HelpDesk --> HelpDeskL1
+    HelpDeskL1 --> Tier1Admins
+```
+
+---
+
+### Important Group Attributes
+| Attribute   | Description                                                      |
+|-------------|------------------------------------------------------------------|
+| cn          | Common-Name of the group                                         |
+| member      | Users, groups, or contacts that are members of the group         |
+| groupType   | Integer specifying group type and scope                          |
+| memberOf    | Groups that contain this group as a member (nested membership)   |
+| objectSid   | Security Identifier (SID) unique to the group                    |
+
+---
+
+Groups are essential for managing access and permissions in AD. Understanding group types, scopes, and nesting is critical for both administration and security assessment.
+
 User and machine accounts are the foundation of AD security and administration. Proper management, naming, and group assignment are critical for both security and operational efficiency. 
