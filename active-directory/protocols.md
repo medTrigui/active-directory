@@ -5,14 +5,14 @@ This document covers the protocols used in Active Directory.
 ## Overview
 
 Active Directory relies on four main protocols:
-- <span style="color:#0074D9"><b>Kerberos</b></span>: Authentication protocol
-- <span style="color:#2ECC40"><b>DNS</b></span>: Name resolution and service location
-- <span style="color:#FF851B"><b>LDAP</b></span>: Directory access and management
-- <span style="color:#B10DC9"><b>MSRPC</b></span>: Remote procedure calls for client-server communication
+- **Kerberos**: Authentication protocol
+- **DNS**: Name resolution and service location
+- **LDAP**: Directory access and management
+- **MSRPC**: Remote procedure calls for client-server communication
 
 ---
 
-## <span style="color:#0074D9">Kerberos</span>
+## Kerberos
 
 Kerberos is the default authentication protocol for domain accounts since Windows 2000. It is an open standard, enabling interoperability with other systems. Kerberos uses mutual authentication and is stateless, relying on tickets rather than transmitting user passwords over the network.
 
@@ -56,7 +56,7 @@ Kerberos ensures that user credentials are never sent over the network, and auth
 
 ---
 
-## <span style="color:#2ECC40">DNS</span>
+## DNS
 
 Active Directory Domain Services (AD DS) relies on DNS to:
 - Allow clients (workstations, servers) to locate Domain Controllers (DCs)
@@ -125,7 +125,7 @@ DNS is critical for AD functionality. Without proper DNS configuration, clients 
 
 ---
 
-## <span style="color:#FF851B">LDAP</span>
+## LDAP
 
 Lightweight Directory Access Protocol (LDAP) is an open, cross-platform protocol used for directory lookups and authentication in Active Directory (AD) and other directory services. LDAP is essential for querying and managing directory information in AD environments.
 
@@ -166,7 +166,7 @@ LDAP is fundamental for both authentication and directory lookups in AD. Secure 
 
 ---
 
-## <span style="color:#B10DC9">MSRPC</span>
+## MSRPC
 
 Microsoft Remote Procedure Call (MSRPC) is Microsoft's implementation of the Remote Procedure Call (RPC) protocol, enabling interprocess communication for client-server applications. MSRPC is fundamental for Windows systems to access and manage resources in Active Directory (AD).
 
@@ -179,10 +179,10 @@ Microsoft Remote Procedure Call (MSRPC) is Microsoft's implementation of the Rem
 
 | Interface   | Description |
 |-------------|-------------|
-| <b>lsarpc</b>  | RPC calls to the Local Security Authority (LSA) for managing local/domain security policy, audit policy, and interactive authentication. Used for domain security management. |
-| <b>netlogon</b>| Authenticates users and services in the domain. Runs as a background service to support domain logons. |
-| <b>samr</b>    | Remote Security Account Manager (SAM) protocol for managing the domain account database (users, groups, computers). Used for CRUD operations on security principals. Can be abused for domain reconnaissance. |
-| <b>drsuapi</b> | Directory Replication Service (DRS) Remote Protocol for replication tasks between Domain Controllers. Can be abused to extract the NTDS.dit database and retrieve password hashes. |
+| lsarpc  | RPC calls to the Local Security Authority (LSA) for managing local/domain security policy, audit policy, and interactive authentication. Used for domain security management. |
+| netlogon| Authenticates users and services in the domain. Runs as a background service to support domain logons. |
+| samr    | Remote Security Account Manager (SAM) protocol for managing the domain account database (users, groups, computers). Used for CRUD operations on security principals. Can be abused for domain reconnaissance. |
+| drsuapi | Directory Replication Service (DRS) Remote Protocol for replication tasks between Domain Controllers. Can be abused to extract the NTDS.dit database and retrieve password hashes. |
 
 **Security Note:**
 - By default, all authenticated users can query some MSRPC interfaces (e.g., samr), which can be abused for reconnaissance. Restricting access via registry settings is recommended.
@@ -191,7 +191,7 @@ MSRPC is critical for AD operations, but its interfaces can be leveraged by atta
 
 ---
 
-## <span style="color:#111111;background:#FFD700;padding:2px 8px;border-radius:4px;">NTLM Authentication</span>
+## NTLM Authentication
 
 NTLM (NT LAN Manager) authentication is a suite of Microsoft security protocols intended to provide authentication, integrity, and confidentiality to users. While Kerberos is preferred, NTLM is still widely used and can be abused if not properly managed.
 
@@ -235,6 +235,18 @@ Rachel:500:aad3c435b514a4eeaad3b935b51304fe:e46b9e548fa0d122de7f59fb6d48eaa2:::
 2. Server responds with CHALLENGE_MESSAGE
 3. Client replies with AUTHENTICATE_MESSAGE
 4. Server validates and grants/denies access
+
+### Mermaid Diagram: NTLM Authentication Flow
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: NEGOTIATE_MESSAGE
+    Server-->>Client: CHALLENGE_MESSAGE
+    Client->>Server: AUTHENTICATE_MESSAGE
+    Server-->>Client: Access granted/denied
+```
 
 ### NTLMv1 (Net-NTLMv1)
 - Challenge/response using NT and LM hash
