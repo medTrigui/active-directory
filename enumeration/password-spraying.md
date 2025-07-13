@@ -1,6 +1,11 @@
 # Password Spraying in Active Directory Environments
 
-## Overview
+## Table of Contents
+- [Overview](#overview)
+- [Enumerating & Retrieving Password Policies](#enumerating--retrieving-password-policies)
+- [Password Spraying – Making a Target User List](#password-spraying--making-a-target-user-list)
+
+# Overview
 - **Password spraying** is an attack where a few common passwords are tried against many accounts, avoiding account lockouts.
 - Targets weak, shared, or default passwords across large user bases.
 - Common in both internal and external AD attacks.
