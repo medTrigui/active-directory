@@ -172,11 +172,18 @@ sudo bloodhound-python -u 'forend' -p 'Klmcargo2' -ns 172.16.5.5 -d inlanefreigh
 ## Enumeration Workflow (Visual)
 ```mermaid
 flowchart TD
-    A[Start: Valid Domain Credentials on Windows] --> B[ActiveDirectory PowerShell Module]
-    B --> C[PowerView / SharpView]
-    C --> D[Snaffler]
-    D --> E[SharpHound (BloodHound)]
-    E --> F[Analysis & Next Steps]
+    Start --> PowerShellModule
+    PowerShellModule --> PowerView
+    PowerView --> Snaffler
+    Snaffler --> SharpHound
+    SharpHound --> Analysis
+
+    Start["Start: Valid Domain Credentials on Windows"]
+    PowerShellModule["ActiveDirectory PowerShell Module"]
+    PowerView["PowerView / SharpView"]
+    Snaffler["Snaffler"]
+    SharpHound["SharpHound"]
+    Analysis["Analysis & Next Steps"]
 ```
 
 ---
