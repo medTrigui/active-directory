@@ -1,4 +1,4 @@
-# Enumeration
+# Internal Enumeration
 
 This document covers tools commonly used for Active Directory enumeration, both from Windows and Linux environments. These tools include open-source scripts, precompiled binaries, and built-in utilities. Below is a table summarizing many of the tools covered in this module:
 
