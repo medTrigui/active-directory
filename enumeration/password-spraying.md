@@ -27,12 +27,13 @@
 
 ## Example Attack Flow
 ```mermaid
-graph TD
-    A[Attacker] -->|List of usernames| B[AD Login Portal]
-    A -->|Common password (e.g., Winter2024!)| B
-    B -->|Success?| C{Valid Login?}
-    C -- Yes --> D[Access Gained]
-    C -- No --> E[Try Next User]
+flowchart TD
+    Attacker -->|Usernames| LoginPortal
+    Attacker -->|Password| LoginPortal
+    LoginPortal -->|Success| AccessGained
+    LoginPortal -->|Fail| NextUser
+    AccessGained[Access Gained]
+    NextUser[Try Next User]
 ```
 
 ## Sample Command (CrackMapExec)
