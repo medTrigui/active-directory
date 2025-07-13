@@ -165,3 +165,129 @@ Get-DomainPolicy
 - If policy cannot be retrieved, spray with extreme caution (low frequency, long intervals).
 - Avoid account lockouts—especially in environments requiring manual unlocks.
 - Use a combination of tools for redundancy and stealth. 
+
+# Password Spraying – Making a Target User List
+
+## Why Build a Target User List?
+- Increases success rate and stealth of password spraying.
+- Reduces risk of account lockout by focusing on valid users.
+- Enables tailored attacks based on domain policy and user attributes.
+
+## User Enumeration Methods
+| Method                | Credentialed | Tools/Commands                | Notes                                  |
+|-----------------------|--------------|-------------------------------|----------------------------------------|
+| SMB NULL Session      | No           | enum4linux, rpcclient         | May be blocked in modern domains       |
+| LDAP Anonymous Bind   | No           | ldapsearch, windapsearch.py   | Legacy/weak config, not always allowed |
+| Kerberos Pre-Auth     | No           | Kerbrute                      | Fast, stealthy, no logon failures      |
+| Credentialed Query    | Yes          | CrackMapExec, rpcclient       | Most reliable, needs creds             |
+| External OSINT        | No           | linkedin2username, email scrape| For external/limited access            |
+
+---
+
+## Example: enum4linux (SMB NULL Session)
+```bash
+enum4linux -U 172.16.5.5 | grep "user:" | cut -f2 -d"[" | cut -f1 -d"]"
+```
+**Sample Output:**
+```
+administrator
+guest
+krbtgt
+lab_adm
+htb-student
+avazquez
+pfalcon
+...
+```
+
+---
+
+## Example: rpcclient (SMB NULL Session)
+```bash
+rpcclient -U "" -N 172.16.5.5
+rpcclient $> enumdomusers
+```
+**Sample Output:**
+```
+user:[administrator] rid:[0x1f4]
+user:[guest] rid:[0x1f5]
+user:[krbtgt] rid:[0x1f6]
+...
+```
+
+---
+
+## Example: CrackMapExec (Credentialed or NULL Session)
+```bash
+crackmapexec smb 172.16.5.5 --users
+```
+**Sample Output:**
+```
+INLANEFREIGHT.LOCAL\administrator  badpwdcount: 0 baddpwdtime: ...
+INLANEFREIGHT.LOCAL\guest          badpwdcount: 0 baddpwdtime: ...
+...
+```
+
+---
+
+## Example: ldapsearch (LDAP Anonymous Bind)
+```bash
+ldapsearch -h 172.16.5.5 -x -b "DC=INLANEFREIGHT,DC=LOCAL" -s sub "(&(objectclass=user))" | grep sAMAccountName: | cut -f2 -d" "
+```
+**Sample Output:**
+```
+guest
+htb-student
+avazquez
+...
+```
+
+---
+
+## Example: windapsearch (LDAP Anonymous Bind)
+```bash
+./windapsearch.py --dc-ip 172.16.5.5 -u "" -U
+```
+**Sample Output:**
+```
+[+] Enumerating all AD users
+[+] Found 2906 users:
+cn: Guest
+userPrincipalName: htb-student@inlanefreight.local
+...
+```
+
+---
+
+## Example: Kerbrute (Kerberos Pre-Auth)
+```bash
+kerbrute userenum -d inlanefreight.local --dc 172.16.5.5 /opt/jsmith.txt
+```
+**Sample Output:**
+```
+[+] VALID USERNAME: jjones@inlanefreight.local
+[+] VALID USERNAME: sbrown@inlanefreight.local
+...
+```
+
+---
+
+## Example: CrackMapExec (Credentialed)
+```bash
+sudo crackmapexec smb 172.16.5.5 -u htb-student -p Academy_student_AD! --users
+```
+**Sample Output:**
+```
+INLANEFREIGHT.LOCAL\administrator  badpwdcount: 1 baddpwdtime: ...
+INLANEFREIGHT.LOCAL\guest          badpwdcount: 0 baddpwdtime: ...
+...
+```
+
+---
+
+## Best Practices
+- Always consider the domain password policy before spraying.
+- Clean and deduplicate user lists; filter out disabled or locked accounts if possible.
+- Log all spray attempts: users, DC, time, date, passwords tried.
+- If policy is unknown, spray with extreme caution (low frequency, long intervals).
+- Use OSINT and external sources if internal enumeration is not possible. 
