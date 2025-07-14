@@ -29,6 +29,7 @@
 4. **Escalate/Move Laterally:** Reset passwords, add to groups, etc.
 
 <img width="1734" height="821" alt="image" src="https://github.com/user-attachments/assets/3a2ba8ef-5ca0-4dec-bb32-83b605e6d51f" />
+Credit to:  Charlie Bromberg
 
 ## Real-World Scenarios
 - Helpdesk can reset Domain Admin passwords (ForceChangePassword)
