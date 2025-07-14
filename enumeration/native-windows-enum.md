@@ -1,4 +1,4 @@
-# Living Off the Land: Native Windows Enumeration
+# Native Windows Enumeration
 
 This document covers techniques for enumerating Active Directory environments using only native Windows tools and commands—no external binaries or scripts required. This approach is essential when tool uploads are blocked or for stealthier assessments.
 
