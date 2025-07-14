@@ -1,4 +1,4 @@
-# ACL Abuse in Active Directory (Nitty-Gritty)
+# ACL Abuse in Active Directory
 
 ## What are ACLs & ACEs?
 - **ACL (Access Control List):** List of permissions on an AD object.
@@ -27,6 +27,8 @@
 2. **Find abusable ACEs:** Look for above rights on users/groups/computers
 3. **Exploit:** Use PowerView, BloodHound, or built-in tools to abuse rights
 4. **Escalate/Move Laterally:** Reset passwords, add to groups, etc.
+
+<img width="1734" height="821" alt="image" src="https://github.com/user-attachments/assets/3a2ba8ef-5ca0-4dec-bb32-83b605e6d51f" />
 
 ## Real-World Scenarios
 - Helpdesk can reset Domain Admin passwords (ForceChangePassword)
