@@ -126,11 +126,11 @@ WHERE u.domain <> c.domain RETURN u,r,c
 
 ```powershell
 # Example Get-ADTrust output analysis
-Direction               : BiDirectional   
-DisallowTransivity      : False                  
-ForestTransitive        : True                
-IntraForest             : False          
-SIDFilteringQuarantined : False              
+Direction               : BiDirectional
+DisallowTransivity      : False
+ForestTransitive        : True
+IntraForest             : False
+SIDFilteringQuarantined : False
 SelectiveAuthentication : False
 ```
 
