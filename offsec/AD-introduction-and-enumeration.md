@@ -126,3 +126,153 @@ flowchart LR
 This methodology ensures comprehensive coverage and maximizes the chance of finding privilege escalation paths in complex AD environments.
 
 ---
+
+## Active Directory Enumeration Using Manual Tools
+
+Manual enumeration forms the foundation of AD reconnaissance, leveraging built-in Windows tools and PowerShell/.NET capabilities. This approach provides deep understanding of the domain structure and builds expertise for more advanced techniques.
+
+### Learning Objectives
+- Enumerate Active Directory using legacy Windows applications
+- Use PowerShell and .NET to perform additional AD enumeration
+
+---
+
+## Enumeration Using Legacy Windows Tools
+
+### Initial Access Setup
+**RDP Connection (Recommended):**
+```bash
+xfreerdp /u:<username> /d:<domain> /v:<target_ip>
+# Example: xfreerdp /u:stephanie /d:corp.com /v:192.168.50.75
+```
+
+> **Warning**: Use RDP over PowerShell Remoting to avoid Kerberos Double Hop issues that can break domain enumeration tools.
+
+### User Enumeration with net.exe
+
+**List All Domain Users:**
+```cmd
+net user /domain
+```
+*Sample Output:*
+```
+User accounts for \\DC1.corp.com
+-------------------------------------------------------------------------------
+Administrator    dave         Guest
+iis_service      jeff         jeffadmin  
+jen              krbtgt       pete
+stephanie
+```
+
+**Enumerate Specific User:**
+```cmd
+net user <username> /domain
+# Example: net user jeffadmin /domain
+```
+
+**Key Information to Extract:**
+- **Account Status**: Active/Inactive, expiration dates
+- **Password Policy**: Last set, expiration, change requirements  
+- **Group Memberships**: Local and Global groups
+- **Login Information**: Last logon, allowed workstations
+- **Administrative Indicators**: Look for prefixes/suffixes like "admin", "svc_", etc.
+
+*Critical Finding Example:*
+```
+User name                    jeffadmin
+Local Group Memberships      *Administrators
+Global Group memberships     *Domain Users    *Domain Admins
+```
+→ **High-Value Target**: Domain Admin account identified
+
+### Group Enumeration with net.exe
+
+**List All Domain Groups:**
+```cmd
+net group /domain
+```
+*Sample Output:*
+```
+Group Accounts for \\DC1.corp.com
+-------------------------------------------------------------------------------
+*Domain Admins           *Enterprise Admins
+*Management Department   *Sales Department
+*Development Department  *Domain Users
+```
+
+**Enumerate Group Members:**
+```cmd
+net group "<group_name>" /domain
+# Example: net group "Domain Admins" /domain
+# Example: net group "Sales Department" /domain
+```
+
+### Strategic Enumeration Priorities
+
+**1. High-Privilege Groups (Priority 1):**
+```cmd
+net group "Domain Admins" /domain
+net group "Enterprise Admins" /domain  
+net group "Schema Admins" /domain
+net group "Administrators" /domain
+```
+
+**2. Custom Groups (Priority 2):**
+```cmd
+net group "Management Department" /domain
+net group "Development Department" /domain
+net group "Sales Department" /domain
+```
+
+**3. Service Groups (Priority 3):**
+```cmd
+net group "Backup Operators" /domain
+net group "Server Operators" /domain
+net group "Account Operators" /domain
+```
+
+### Enumeration Workflow
+
+```mermaid
+flowchart TD
+    Start["RDP to Domain-Joined Host"] --> Users["net user /domain"]
+    Users --> UserDetail["net user <target> /domain"]
+    UserDetail --> Groups["net group /domain"]
+    Groups --> GroupDetail["net group '<group>' /domain"]
+    GroupDetail --> Analyze["Analyze Privileges & Access"]
+    
+    Analyze --> HighValue{"High-Value<br/>Targets Found?"}
+    HighValue -->|Yes| Document["Document Findings"]
+    HighValue -->|No| Continue["Continue Enumeration"]
+    
+    Document --> NextPhase["Advanced Enumeration"]
+    Continue --> NextPhase
+    
+    style Start fill:#e1f5fe
+    style HighValue fill:#fff3e0
+    style Document fill:#e8f5e8
+    style NextPhase fill:#f3e5f5
+```
+
+### Key Takeaways from Legacy Tool Enumeration
+
+**Advantages:**
+- **Stealth**: Built-in tools, minimal detection risk
+- **Universal**: Available on all Windows systems
+- **No Dependencies**: Works without additional tools
+
+**Limitations:**
+- **Limited Output**: Basic information only
+- **Manual Process**: Requires individual queries
+- **No Advanced Filtering**: Cannot perform complex searches
+
+**Information Gained:**
+- User account inventory
+- Administrative account identification  
+- Group structure and memberships
+- Custom organizational groups
+- Baseline for advanced enumeration
+
+This foundational enumeration provides the groundwork for more sophisticated PowerShell and automated techniques covered in subsequent sections.
+
+---
