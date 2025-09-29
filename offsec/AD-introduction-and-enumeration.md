@@ -276,3 +276,144 @@ flowchart TD
 This foundational enumeration provides the groundwork for more sophisticated PowerShell and automated techniques covered in subsequent sections.
 
 ---
+
+## Enumeration Using PowerShell and .NET Classes
+
+### Why PowerShell/.NET Over Built-in Cmdlets?
+- **Get-ADUser** and similar cmdlets require RSAT (Remote Server Administration Tools)
+- RSAT is rarely installed on client machines and requires admin privileges
+- PowerShell/.NET approach works with basic user privileges and mimics normal AD operations
+
+### LDAP and Active Directory Communication
+
+**LDAP Protocol Fundamentals:**
+- Primary communication protocol for AD queries
+- Uses Active Directory Services Interface (ADSI) as LDAP provider
+- Requires specific LDAP ADsPath format
+
+**LDAP Path Structure:**
+```
+LDAP://HostName[:PortNumber][/DistinguishedName]
+```
+
+**Components:**
+- **HostName**: Computer name, IP, or domain name (we want PDC for most current info)
+- **PortNumber**: Optional (auto-selected based on SSL usage)
+- **DistinguishedName**: Unique object identifier in LDAP format
+
+### Distinguished Names (DN) Structure
+
+**Format Example:**
+```
+CN=Stephanie,CN=Users,DC=corp,DC=com
+```
+
+**Reading Order (Right to Left):**
+- **DC=corp,DC=com**: Domain Components (domain itself)
+- **CN=Users**: Common Name of parent container
+- **CN=Stephanie**: Common Name of the object
+
+**Key Terms:**
+- **CN**: Common Name (object identifier)
+- **DC**: Domain Component (domain hierarchy)
+- **OU**: Organizational Unit (container for objects)
+
+### Building the LDAP Path Dynamically
+
+#### Step 1: Find the Primary Domain Controller (PDC)
+```powershell
+[System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+```
+*Output:*
+```
+Forest                  : corp.com
+PdcRoleOwner           : DC1.corp.com
+Name                   : corp.com
+```
+
+#### Step 2: Extract PDC Hostname
+```powershell
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+Write-Host $PDC
+# Output: DC1.corp.com
+```
+
+#### Step 3: Get Domain Distinguished Name
+```powershell
+$DN = ([adsi]'').distinguishedName
+Write-Host $DN
+# Output: DC=corp,DC=com
+```
+
+#### Step 4: Construct Full LDAP Path
+```powershell
+$LDAP = "LDAP://$PDC/$DN"
+Write-Host $LDAP
+# Output: LDAP://DC1.corp.com/DC=corp,DC=com
+```
+
+### Complete LDAP Path Script
+
+**Full Script (enumeration.ps1):**
+```powershell
+# Get Primary Domain Controller
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+
+# Get Domain Distinguished Name
+$DN = ([adsi]'').distinguishedName 
+
+# Construct LDAP Path
+$LDAP = "LDAP://$PDC/$DN"
+
+# Display Result
+$LDAP
+```
+
+**Execution:**
+```powershell
+# Bypass execution policy
+powershell -ep bypass
+
+# Run script
+.\enumeration.ps1
+# Output: LDAP://DC1.corp.com/DC=corp,DC=com
+```
+
+### LDAP Path Construction Flow
+
+```mermaid
+flowchart TD
+    Start["PowerShell Session"] --> GetDomain["Get Current Domain Object"]
+    GetDomain --> ExtractPDC["Extract PDC Name<br/>(.PdcRoleOwner.Name)"]
+    ExtractPDC --> GetDN["Get Domain DN<br/>([adsi]'').distinguishedName"]
+    GetDN --> BuildLDAP["Construct LDAP Path<br/>LDAP://PDC/DN"]
+    BuildLDAP --> Result["LDAP://DC1.corp.com/DC=corp,DC=com"]
+    
+    style Start fill:#e1f5fe
+    style Result fill:#e8f5e8
+    style GetDomain fill:#f3e5f5
+    style ExtractPDC fill:#f3e5f5
+    style GetDN fill:#f3e5f5
+    style BuildLDAP fill:#f3e5f5
+```
+
+### Key Advantages of This Approach
+
+**Dynamic Discovery:**
+- Automatically finds PDC (most current information)
+- Works across different domains without hardcoding
+- Proper DN format regardless of domain structure
+
+**Stealth and Compatibility:**
+- Uses standard .NET classes (available on all Windows systems)
+- No additional tools or admin privileges required
+- Mimics normal AD operations
+
+**Reusability:**
+- Script works in any AD environment
+- Foundation for advanced enumeration techniques
+- Easily adaptable for different query types
+
+This LDAP path foundation enables sophisticated AD enumeration using DirectorySearcher and other .NET classes in subsequent techniques.
+
+---
