@@ -417,3 +417,259 @@ flowchart TD
 This LDAP path foundation enables sophisticated AD enumeration using DirectorySearcher and other .NET classes in subsequent techniques.
 
 ---
+
+## Adding Search Functionality to PowerShell Script
+
+### .NET Classes for AD Searching
+
+**Core Classes:**
+- **DirectoryEntry**: Encapsulates AD service hierarchy objects
+- **DirectorySearcher**: Performs LDAP queries against AD
+- **Location**: System.DirectoryServices namespace
+
+**DirectoryEntry Properties:**
+- Encapsulates LDAP path pointing to hierarchy top
+- Can accept credentials (not needed when already authenticated)
+- Acts as SearchRoot for DirectorySearcher
+
+**DirectorySearcher Methods:**
+- **FindAll()**: Returns collection of all matching entries
+- **SearchRoot**: Defines where search begins in AD hierarchy
+
+### Basic Search Implementation
+
+**Initial Search Script:**
+```powershell
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+$DN = ([adsi]'').distinguishedName 
+$LDAP = "LDAP://$PDC/$DN"
+
+$direntry = New-Object System.DirectoryServices.DirectoryEntry($LDAP)
+$dirsearcher = New-Object System.DirectoryServices.DirectorySearcher($direntry)
+$dirsearcher.FindAll()
+```
+
+*Output (truncated):*
+```
+Path
+----
+LDAP://DC1.corp.com/DC=corp,DC=com
+LDAP://DC1.corp.com/CN=Users,DC=corp,DC=com
+LDAP://DC1.corp.com/CN=Computers,DC=corp,DC=com
+LDAP://DC1.corp.com/OU=Domain Controllers,DC=corp,DC=com
+...
+```
+
+### Filtering Results with samAccountType
+
+**samAccountType Values:**
+- **805306368** (0x30000000): Normal user accounts
+- **805306369** (0x30000001): Computer accounts  
+- **268435456** (0x10000000): Group accounts
+
+**User Enumeration Script:**
+```powershell
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+$DN = ([adsi]'').distinguishedName 
+$LDAP = "LDAP://$PDC/$DN"
+
+$direntry = New-Object System.DirectoryServices.DirectoryEntry($LDAP)
+$dirsearcher = New-Object System.DirectoryServices.DirectorySearcher($direntry)
+$dirsearcher.filter="samAccountType=805306368"
+$dirsearcher.FindAll()
+```
+
+*Sample Output:*
+```
+Path                                                         Properties
+----                                                         ----------
+LDAP://DC1.corp.com/CN=Administrator,CN=Users,DC=corp,DC=com {logoncount, codepage, objectcategory...}
+LDAP://DC1.corp.com/CN=jeffadmin,CN=Users,DC=corp,DC=com     {logoncount, codepage, objectcategory...}
+```
+
+### Extracting Object Properties
+
+**Property Enumeration Script:**
+```powershell
+$PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+$DN = ([adsi]'').distinguishedName 
+$LDAP = "LDAP://$PDC/$DN"
+
+$direntry = New-Object System.DirectoryServices.DirectoryEntry($LDAP)
+$dirsearcher = New-Object System.DirectoryServices.DirectorySearcher($direntry)
+$dirsearcher.filter="samAccountType=805306368"
+$result = $dirsearcher.FindAll()
+
+Foreach($obj in $result)
+{
+    Foreach($prop in $obj.Properties)
+    {
+        $prop
+    }
+    Write-Host "-------------------------------"
+}
+```
+
+**Key User Attributes:**
+- **memberof**: Group memberships (critical for privilege analysis)
+- **samaccountname**: Username
+- **distinguishedname**: Full LDAP path
+- **useraccountcontrol**: Account status and properties
+- **admincount**: Indicates administrative privilege history
+
+### Targeted Filtering Examples
+
+**Search Specific User:**
+```powershell
+$dirsearcher.filter="name=jeffadmin"
+$result = $dirsearcher.FindAll()
+
+Foreach($obj in $result)
+{
+    Foreach($prop in $obj.Properties)
+    {
+        $prop.memberof
+    }
+}
+```
+
+*Output:*
+```
+CN=Domain Admins,CN=Users,DC=corp,DC=com
+CN=Administrators,CN=Builtin,DC=corp,DC=com
+```
+
+### Flexible LDAP Search Function
+
+**Reusable Function (function.ps1):**
+```powershell
+function LDAPSearch {
+    param (
+        [string]$LDAPQuery
+    )
+
+    $PDC = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().PdcRoleOwner.Name
+    $DistinguishedName = ([adsi]'').distinguishedName
+
+    $DirectoryEntry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$PDC/$DistinguishedName")
+    $DirectorySearcher = New-Object System.DirectoryServices.DirectorySearcher($DirectoryEntry, $LDAPQuery)
+
+    return $DirectorySearcher.FindAll()
+}
+```
+
+**Usage:**
+```powershell
+# Import function
+Import-Module .\function.ps1
+
+# Search users
+LDAPSearch -LDAPQuery "(samAccountType=805306368)"
+
+# Search groups
+LDAPSearch -LDAPQuery "(objectclass=group)"
+
+# Complex filter
+LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Sales Department))"
+```
+
+### Advanced Group Enumeration
+
+**Group Member Analysis:**
+```powershell
+# Get all groups and their members
+foreach ($group in $(LDAPSearch -LDAPQuery "(objectCategory=group)")) {
+    $group.properties | select {$_.cn}, {$_.member}
+}
+
+# Target specific group
+$sales = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Sales Department))"
+$sales.properties.member
+```
+
+*Sample Output:*
+```
+CN=Development Department,DC=corp,DC=com
+CN=pete,CN=Users,DC=corp,DC=com
+CN=stephanie,CN=Users,DC=corp,DC=com
+```
+
+### Nested Group Discovery
+
+**Why Nested Groups Matter:**
+- Groups can be members of other groups
+- Users inherit permissions from all parent groups
+- `net.exe` only shows direct user memberships
+- PowerShell/.NET reveals complete hierarchy
+
+**Nested Group Analysis:**
+```powershell
+# Sales Department members
+$sales = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Sales Department))"
+$sales.properties.member
+
+# Development Department members
+$dev = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Development Department*))"
+$dev.properties.member
+
+# Management Department members  
+$mgmt = LDAPSearch -LDAPQuery "(&(objectCategory=group)(cn=Management Department*))"
+$mgmt.properties.member
+```
+
+### PowerShell vs net.exe Comparison
+
+| Feature | net.exe | PowerShell/.NET |
+|---------|---------|-----------------|
+| **User Enumeration** | Basic info only | Full attribute access |
+| **Group Discovery** | Direct members only | Nested groups revealed |
+| **Filtering** | Limited | LDAP filter syntax |
+| **Attributes** | Fixed output | All object properties |
+| **Automation** | Manual queries | Scriptable functions |
+| **Detection** | Very low | Low (native .NET) |
+
+### Search Workflow
+
+```mermaid
+flowchart TD
+    Start["LDAP Path Created"] --> DirEntry["DirectoryEntry Object"]
+    DirEntry --> DirSearcher["DirectorySearcher Object"]
+    DirSearcher --> Filter["Apply LDAP Filter"]
+    Filter --> Search["FindAll() Method"]
+    Search --> Results["Result Collection"]
+    Results --> Loop["Foreach Object Loop"]
+    Loop --> Props["Extract Properties"]
+    Props --> Analysis["Analyze Attributes"]
+    
+    Filter --> UserFilter["samAccountType=805306368<br/>(Users)"]
+    Filter --> GroupFilter["objectclass=group<br/>(Groups)"]
+    Filter --> CustomFilter["name=username<br/>(Specific Object)"]
+    
+    style Start fill:#e1f5fe
+    style Results fill:#e8f5e8
+    style Analysis fill:#fff3e0
+```
+
+### Key Advantages of PowerShell/.NET Approach
+
+**Enhanced Visibility:**
+- Complete object attribute access
+- Nested group membership discovery
+- Administrative privilege indicators
+- Service account identification
+
+**Flexibility:**
+- Custom LDAP filter syntax
+- Scriptable and reusable functions
+- Dynamic property selection
+- Complex search criteria
+
+**Stealth:**
+- Uses built-in .NET classes
+- Normal LDAP traffic patterns
+- No additional tool requirements
+- Minimal detection footprint
+
+This approach provides comprehensive AD enumeration capabilities that far exceed basic Windows tools while maintaining operational security and compatibility across environments.
+
+---
