@@ -673,3 +673,227 @@ flowchart TD
 This approach provides comprehensive AD enumeration capabilities that far exceed basic Windows tools while maintaining operational security and compatibility across environments.
 
 ---
+
+## Enumerating Active Directory Using Automated Tools
+
+Automated tools streamline AD enumeration by providing pre-built functions that leverage the same .NET classes and LDAP techniques we've explored. These tools significantly speed up reconnaissance while providing advanced filtering and analysis capabilities.
+
+---
+
+## AD Enumeration with PowerView
+
+### PowerView Overview
+PowerView is a comprehensive PowerShell script containing numerous functions for AD enumeration. It builds upon the same .NET classes (DirectoryEntry, DirectorySearcher) we used in custom scripts, but provides streamlined commands with advanced filtering capabilities.
+
+### Initial Setup
+
+**Import PowerView:**
+```powershell
+Import-Module .\PowerView.ps1
+```
+
+### Core Domain Information
+
+**Get Basic Domain Info:**
+```powershell
+Get-NetDomain
+```
+
+*Sample Output:*
+```
+Forest                  : corp.com
+DomainControllers       : {DC1.corp.com}
+PdcRoleOwner           : DC1.corp.com
+RidRoleOwner           : DC1.corp.com
+InfrastructureRoleOwner : DC1.corp.com
+Name                   : corp.com
+```
+
+### User Enumeration with PowerView
+
+**All Users (Full Details):**
+```powershell
+Get-NetUser
+```
+
+*Key Attributes Returned:*
+- **distinguishedname**: Full LDAP path
+- **samaccountname**: Username
+- **memberof**: Group memberships
+- **admincount**: Administrative privilege indicator
+- **lastlogon**: Last authentication time
+- **pwdlastset**: Password last changed
+
+**Filtered User Information:**
+```powershell
+# Basic user list
+Get-NetUser | select cn
+
+# User activity analysis
+Get-NetUser | select cn,pwdlastset,lastlogon
+
+# Administrative users
+Get-NetUser | where {$_.admincount -eq 1} | select cn,memberof
+```
+
+*Sample Output:*
+```
+cn            pwdlastset            lastlogon
+--            ----------            ---------
+Administrator 8/16/2022 5:27:22 PM  9/14/2022 2:37:15 AM
+jeffadmin     9/2/2022 4:26:48 PM   9/14/2022 2:26:37 AM
+iis_service   9/7/2022 5:38:43 AM   9/14/2022 2:35:55 AM
+```
+
+### Group Enumeration with PowerView
+
+**All Groups:**
+```powershell
+# Basic group list
+Get-NetGroup | select cn
+
+# Specific group details
+Get-NetGroup "Sales Department" | select member
+
+# High-privilege groups
+Get-NetGroup "Domain Admins","Enterprise Admins","Schema Admins" | select cn,member
+```
+
+*Sample Output:*
+```
+member
+------
+{CN=Development Department,DC=corp,DC=com, CN=pete,CN=Users,DC=corp,DC=com, CN=stephanie,CN=Users,DC=corp,DC=com}
+```
+
+### Advanced PowerView Techniques
+
+**User Attribute Analysis:**
+```powershell
+# Dormant accounts (old passwords)
+Get-NetUser | where {$_.pwdlastset -lt (Get-Date).AddDays(-90)} | select cn,pwdlastset
+
+# Never logged in users
+Get-NetUser | where {$_.lastlogon -eq $null -or $_.lastlogon -eq 0} | select cn
+
+# Service accounts
+Get-NetUser | where {$_.cn -like "*service*" -or $_.cn -like "*svc*"} | select cn,memberof
+
+# Accounts with passwords that don't expire
+Get-NetUser | where {$_.useraccountcontrol -band 65536} | select cn,pwdlastset
+```
+
+**Administrative Privilege Discovery:**
+```powershell
+# Users with adminCount=1 (historical admin access)
+Get-NetUser | where {$_.admincount -eq 1} | select cn,memberof,lastlogon
+
+# Domain Admins group members
+Get-NetGroupMember "Domain Admins" | select MemberName,MemberSID
+
+# Local administrators on specific computers
+Get-NetLocalGroup -ComputerName <target> -GroupName "Administrators"
+```
+
+### PowerView vs Custom Scripts Comparison
+
+| Feature | Custom Script | PowerView |
+|---------|---------------|-----------|
+| **Setup Time** | Build from scratch | Import and use |
+| **Functionality** | Basic LDAP queries | 100+ specialized functions |
+| **Filtering** | Manual loops | Built-in pipeline support |
+| **Error Handling** | Custom implementation | Pre-built robustness |
+| **Learning Curve** | High (LDAP/NET knowledge) | Medium (PowerShell cmdlets) |
+| **Customization** | Full control | Parameter-based |
+| **Detection Risk** | Very Low | Low (common tool) |
+
+### PowerView Enumeration Workflow
+
+```mermaid
+flowchart TD
+    Start["Import PowerView"] --> Domain["Get-NetDomain<br/>Basic Info"]
+    Domain --> Users["Get-NetUser<br/>User Enumeration"]
+    Users --> Groups["Get-NetGroup<br/>Group Analysis"]
+    Groups --> Filter["Pipeline Filtering<br/>select, where"]
+    Filter --> Analysis["Privilege Analysis"]
+    
+    Users --> UserAttribs["User Attributes<br/>pwdlastset, lastlogon"]
+    Groups --> GroupMembers["Group Members<br/>Nested Groups"]
+    Analysis --> Targets["High-Value Targets"]
+    
+    UserAttribs --> Dormant["Dormant Accounts"]
+    UserAttribs --> Service["Service Accounts"]
+    GroupMembers --> Admins["Admin Groups"]
+    
+    style Start fill:#e1f5fe
+    style Targets fill:#ff6b6b
+    style Analysis fill:#fff3e0
+```
+
+### Strategic User Analysis
+
+**Identifying High-Value Targets:**
+
+1. **Administrative Accounts:**
+   ```powershell
+   Get-NetUser | where {$_.memberof -match "Admin"} | select cn,memberof
+   ```
+
+2. **Dormant Accounts (Stale Passwords):**
+   ```powershell
+   Get-NetUser | where {$_.pwdlastset -lt (Get-Date).AddDays(-90)} | select cn,pwdlastset,lastlogon
+   ```
+
+3. **Service Accounts:**
+   ```powershell
+   Get-NetUser -ServicePrincipalName *
+   ```
+
+4. **Accounts with Pre-Authentication Disabled (ASREPRoast):**
+   ```powershell
+   Get-NetUser -PreauthNotRequired | select cn,serviceprincipalname
+   ```
+
+### Key PowerView Commands Reference
+
+**Domain Information:**
+- `Get-NetDomain`: Domain details
+- `Get-NetDomainController`: Domain controller info
+- `Get-NetForest`: Forest information
+
+**User/Group Enumeration:**
+- `Get-NetUser`: User objects
+- `Get-NetGroup`: Group objects  
+- `Get-NetGroupMember`: Group membership
+- `Get-NetLocalGroup`: Local group enumeration
+
+**Computer Enumeration:**
+- `Get-NetComputer`: Computer objects
+- `Get-NetLoggedon`: Logged-on users
+- `Get-NetSession`: Active sessions
+
+**Advanced Functions:**
+- `Find-LocalAdminAccess`: Find computers where current user has admin
+- `Find-DomainShare`: Discover network shares
+- `Get-NetGPO`: Group Policy Objects
+
+### Advantages of PowerView
+
+**Efficiency:**
+- Pre-built functions eliminate script development time
+- Pipeline support for complex filtering
+- Comprehensive error handling
+
+**Functionality:**
+- Advanced enumeration techniques beyond basic LDAP
+- Specialized functions for privilege escalation paths
+- Built-in analysis for common attack vectors
+
+**Flexibility:**
+- Parameter-based filtering
+- Pipeline integration with PowerShell
+- Easy output formatting and analysis
+
+PowerView demonstrates how researchers build upon fundamental LDAP/.NET techniques to create powerful, user-friendly enumeration tools while maintaining the stealth benefits of native Windows functionality.
+
+---
