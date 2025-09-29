@@ -897,3 +897,386 @@ flowchart TD
 PowerView demonstrates how researchers build upon fundamental LDAP/.NET techniques to create powerful, user-friendly enumeration tools while maintaining the stealth benefits of native Windows functionality.
 
 ---
+
+## Manual Enumeration - Expanding our Repertoire
+
+Now that we understand LDAP fundamentals and have enumeration tools available, let's expand our reconnaissance to build a comprehensive domain map. Understanding object relationships and system configurations is crucial for identifying attack vectors and privilege escalation paths.
+
+### Learning Objectives
+- Enumerate Operating Systems and computer objects
+- Enumerate permissions and logged-on users
+- Enumerate through Service Principal Names (SPNs)
+- Enumerate Object Permissions and ACLs
+- Explore Domain Shares and network resources
+
+---
+
+## Enumerating Operating Systems
+
+Computer objects in AD contain valuable information about the network infrastructure, including operating systems, roles, and potential vulnerabilities.
+
+### Computer Object Enumeration
+
+**Basic Computer Information:**
+```powershell
+Get-NetComputer
+```
+
+*Key Computer Attributes:*
+- **operatingsystem**: OS version and edition
+- **operatingsystemversion**: Build numbers and patch levels
+- **dnshostname**: Fully qualified domain names
+- **serviceprincipalname**: Services running on the host
+- **lastlogon**: Recent activity indicators
+- **useraccountcontrol**: Computer account properties
+
+**Filtered Computer Enumeration:**
+```powershell
+# Operating systems and hostnames
+Get-NetComputer | select operatingsystem,dnshostname
+
+# Detailed system information
+Get-NetComputer | select dnshostname,operatingsystem,operatingsystemversion,lastlogon
+
+# Server systems only
+Get-NetComputer | where {$_.operatingsystem -like "*Server*"} | select dnshostname,operatingsystem
+
+# Workstation systems
+Get-NetComputer | where {$_.operatingsystem -notlike "*Server*"} | select dnshostname,operatingsystem
+```
+
+*Sample Output:*
+```
+operatingsystem              dnshostname
+---------------              -----------
+Windows Server 2022 Standard DC1.corp.com
+Windows Server 2022 Standard web04.corp.com
+Windows Server 2022 Standard FILES04.corp.com
+Windows 11 Pro               client74.corp.com
+Windows 11 Pro               client75.corp.com
+Windows 10 Pro               CLIENT76.corp.com
+```
+
+### Strategic Analysis of Computer Objects
+
+**1. Operating System Targeting:**
+```powershell
+# Identify older/vulnerable systems
+Get-NetComputer | where {$_.operatingsystem -like "*Windows 10*" -or $_.operatingsystem -like "*Windows 7*"} | select dnshostname,operatingsystem
+
+# Server roles identification
+Get-NetComputer | where {$_.dnshostname -like "*web*" -or $_.dnshostname -like "*file*" -or $_.dnshostname -like "*sql*"} | select dnshostname,operatingsystem
+```
+
+**2. System Activity Analysis:**
+```powershell
+# Recently active computers
+Get-NetComputer | where {$_.lastlogon -gt (Get-Date).AddDays(-30)} | select dnshostname,lastlogon
+
+# Potentially inactive/vulnerable systems
+Get-NetComputer | where {$_.lastlogon -lt (Get-Date).AddDays(-90)} | select dnshostname,lastlogon,operatingsystem
+```
+
+**3. Service Principal Name Analysis:**
+```powershell
+# Computer with multiple services
+Get-NetComputer | where {$_.serviceprincipalname.count -gt 5} | select dnshostname,serviceprincipalname
+
+# Web servers (HTTP SPNs)
+Get-NetComputer | where {$_.serviceprincipalname -like "*HTTP*"} | select dnshostname,serviceprincipalname
+```
+
+### Computer Enumeration Workflow
+
+```mermaid
+flowchart TD
+    Start["Get-NetComputer"] --> Filter["Filter by Criteria"]
+    Filter --> OSTarget["Operating System<br/>Targeting"]
+    Filter --> RoleIdent["Server Role<br/>Identification"]
+    Filter --> ActivityCheck["Activity Analysis"]
+    
+    OSTarget --> OldSystems["Legacy Systems<br/>(Win 7/10)"]
+    OSTarget --> NewSystems["Current Systems<br/>(Win 11/2022)"]
+    
+    RoleIdent --> WebServers["Web Servers<br/>(HTTP SPNs)"]
+    RoleIdent --> FileServers["File Servers<br/>(CIFS SPNs)"]
+    RoleIdent --> DBServers["Database Servers<br/>(SQL SPNs)"]
+    
+    ActivityCheck --> Active["Recent Activity<br/>(High Priority)"]
+    ActivityCheck --> Dormant["Inactive Systems<br/>(Potential Targets)"]
+    
+    OldSystems --> VulnAssess["Vulnerability<br/>Assessment"]
+    WebServers --> WebEnum["Web Application<br/>Enumeration"]
+    FileServers --> ShareEnum["Share<br/>Enumeration"]
+    
+    style Start fill:#e1f5fe
+    style VulnAssess fill:#ff6b6b
+    style WebEnum fill:#fff3e0
+    style ShareEnum fill:#e8f5e8
+```
+
+### Key Insights from Computer Enumeration
+
+**Attack Surface Identification:**
+- **Legacy Systems**: Windows 10/7 may have unpatched vulnerabilities
+- **Server Roles**: Web, file, and database servers offer different attack vectors
+- **Service Density**: Computers with many SPNs may have larger attack surfaces
+
+**Targeting Prioritization:**
+1. **High-Value Servers**: Domain controllers, database servers
+2. **Vulnerable Systems**: Older OS versions, inactive systems
+3. **Lateral Movement Targets**: Workstations with administrative users
+4. **Service Exploitation**: Web applications, database services
+
+**Environmental Mapping:**
+- **Network Topology**: Server roles and client distribution
+- **Technology Stack**: OS versions, application services
+- **Activity Patterns**: User behavior and system utilization
+
+### Computer Object Attributes Reference
+
+**Critical Attributes:**
+- **dnshostname**: Target identification
+- **operatingsystem/operatingsystemversion**: Vulnerability research
+- **serviceprincipalname**: Service enumeration and Kerberoasting
+- **lastlogon**: Activity analysis
+- **useraccountcontrol**: Account properties and delegation settings
+
+**Advanced Attributes:**
+- **msds-supportedencryptiontypes**: Kerberos encryption capabilities
+- **serverreferencebl**: Active Directory site information
+- **primarygroupid**: Computer group membership
+
+This computer enumeration provides the foundation for understanding the network infrastructure and identifying initial attack targets based on system vulnerabilities, service exposure, and activity patterns.
+
+---
+
+## Enumerating Permissions and Logged-on Users
+
+Understanding user-computer relationships and active sessions is crucial for mapping attack paths and maintaining persistent access. This enumeration reveals credential exposure opportunities and lateral movement targets.
+
+### Strategic Goals of Permission/Session Enumeration
+
+**Attack Path Mapping:**
+- Identify where privileged users have active sessions
+- Locate computers where current user has administrative rights
+- Map credential exposure opportunities for privilege escalation
+
+**Persistence Planning:**
+- Discover additional user accounts for maintained access
+- Identify service accounts with elevated privileges
+- Find alternative paths to sensitive data (not always Domain Admin required)
+
+**Chained Compromise Strategy:**
+- Progress through multiple privilege levels toward objectives
+- Establish multiple footholds for redundancy
+- Target "crown jewels" through various privilege paths
+
+### Local Administrative Access Discovery
+
+**Find-LocalAdminAccess Command:**
+```powershell
+Find-LocalAdminAccess
+```
+
+**How It Works:**
+- Uses `OpenServiceW` function to connect to Service Control Manager (SCM)
+- Attempts to open SCM database with `SC_MANAGER_ALL_ACCESS` rights
+- Success indicates administrative privileges on target machine
+
+*Sample Output:*
+```
+client74.corp.com
+```
+
+**Strategic Follow-up:**
+```powershell
+# Verify discovered admin access
+Get-NetLocalGroup -ComputerName client74 -GroupName "Administrators"
+
+# Check for additional privileged groups
+Get-NetLocalGroup -ComputerName client74 -GroupName "Remote Desktop Users"
+```
+
+### Active Session Enumeration Challenges
+
+**NetSessionEnum API Limitations:**
+
+**PowerView Get-NetSession Command:**
+```powershell
+# Basic session enumeration
+Get-NetSession -ComputerName <target>
+
+# Verbose output for troubleshooting
+Get-NetSession -ComputerName <target> -Verbose
+```
+
+*Common Issues:*
+```
+VERBOSE: [Get-NetSession] Error: Access is denied
+```
+
+**Registry Permissions Analysis:**
+```powershell
+Get-Acl -Path HKLM:SYSTEM\CurrentControlSet\Services\LanmanServer\DefaultSecurity\ | fl
+```
+
+*Key Findings:*
+- **SrvsvcSessionInfo** registry key controls NetSessionEnum permissions
+- Modern Windows (Win 10 build 1709+, Server 2019+) restricts access
+- Only administrative privileges allow session enumeration
+- "Authenticated Users" access removed in recent versions
+
+### Alternative Session Enumeration: PsLoggedOn
+
+**Tool Location and Usage:**
+```cmd
+# Navigate to PSTools directory
+cd C:\Tools\PSTools
+
+# Enumerate sessions on target
+.\PsLoggedon.exe \\<target>
+```
+
+**How PsLoggedOn Works:**
+- Enumerates `HKEY_USERS` registry keys for Security Identifiers (SIDs)
+- Converts SIDs to usernames
+- Uses NetSessionEnum for resource share sessions
+- Requires **Remote Registry service** (default on Server 2012 R2+)
+
+**Remote Registry Service Details:**
+- **Workstations**: Disabled by default since Windows 8
+- **Servers**: Enabled by default (2012 R2, 2016, 2019, 2022)
+- **Auto-stop**: After 10 minutes of inactivity
+- **Auto-start**: Triggered by connection attempts
+
+### Practical Session Enumeration Examples
+
+**File Server Enumeration:**
+```cmd
+.\PsLoggedon.exe \\files04
+```
+*Output:*
+```
+Users logged on locally:
+     <unknown time>             CORP\jeff
+Unable to query resource logons
+```
+
+**Web Server Enumeration:**
+```cmd
+.\PsLoggedon.exe \\web04
+```
+*Output:*
+```
+No one is logged on locally.
+Unable to query resource logons
+```
+
+**Administrative Target Enumeration:**
+```cmd
+.\PsLoggedon.exe \\client74
+```
+*Output:*
+```
+Users logged on locally:
+     <unknown time>             CORP\jeffadmin
+
+Users logged on via resource shares:
+     10/5/2022 1:33:32 AM       CORP\stephanie
+```
+
+### Session Enumeration Analysis
+
+**High-Value Findings:**
+- **jeffadmin** logged on CLIENT74 (Domain Admin candidate)
+- **stephanie** has admin rights on CLIENT74
+- **jeff** active session on FILES04 (credential theft opportunity)
+
+**Attack Vector Identification:**
+```mermaid
+flowchart TD
+    Start["Current User: stephanie"] --> AdminCheck["Find-LocalAdminAccess"]
+    AdminCheck --> Client74["CLIENT74<br/>Admin Access"]
+    Client74 --> SessionEnum["PsLoggedOn Enumeration"]
+    SessionEnum --> HighValue["jeffadmin Session<br/>Found"]
+    
+    Start --> FileServer["FILES04<br/>Session Check"]
+    FileServer --> JeffSession["jeff Session<br/>Found"]
+    
+    HighValue --> CredTheft["Credential Theft<br/>Opportunity"]
+    JeffSession --> LateralMove["Lateral Movement<br/>Target"]
+    
+    CredTheft --> DomainAdmin["Potential Domain<br/>Admin Escalation"]
+    
+    style Start fill:#e1f5fe
+    style HighValue fill:#ff6b6b
+    style DomainAdmin fill:#ff6b6b
+    style CredTheft fill:#fff3e0
+```
+
+### Operating System Version Impact
+
+**Modern Windows Restrictions:**
+```powershell
+Get-NetComputer | select dnshostname,operatingsystem,operatingsystemversion
+```
+
+*Sample Output:*
+```
+dnshostname       operatingsystem              operatingsystemversion
+-----------       ---------------              ----------------------
+DC1.corp.com      Windows Server 2022 Standard 10.0 (20348)
+CLIENT76.corp.com Windows 10 Pro               10.0 (16299)
+```
+
+**Key Version Impacts:**
+- **Windows 10 Build 1709+**: NetSessionEnum restrictions implemented
+- **Windows Server 2019+**: Similar restrictions applied
+- **Legacy Systems**: May still allow NetSessionEnum without admin rights
+
+### Session Enumeration Methodology
+
+**1. Administrative Access Discovery:**
+```powershell
+# Find systems with admin access
+Find-LocalAdminAccess
+
+# Validate admin access
+Get-NetLocalGroup -ComputerName <target> -GroupName "Administrators"
+```
+
+**2. Session Enumeration Attempts:**
+```powershell
+# Try PowerView first (fast)
+Get-NetSession -ComputerName <target> -Verbose
+
+# Fall back to PsLoggedOn (reliable on servers)
+.\PsLoggedon.exe \\<target>
+```
+
+**3. Strategic Prioritization:**
+- **High-Value Users**: Domain/Enterprise Admins, service accounts
+- **Administrative Access**: Systems where current user has admin rights
+- **Active Sessions**: Recently active vs stale sessions
+
+### Key Takeaways
+
+**Credential Exposure Opportunities:**
+- Administrative access + logged-on privileged users = credential theft potential
+- Service accounts often have elevated but not maximum privileges
+- Multiple compromise paths may lead to same objectives
+
+**Enumeration Challenges:**
+- Modern Windows restricts session enumeration APIs
+- Different tools work on different OS versions/configurations
+- Remote Registry service availability varies by system type
+
+**Attack Planning:**
+- Map user-computer relationships for lateral movement
+- Identify privilege escalation through credential theft
+- Plan persistent access through multiple user accounts
+
+This enumeration provides the foundation for credential theft attacks and lateral movement planning by revealing where valuable user sessions exist and which systems offer administrative access.
+
+---
