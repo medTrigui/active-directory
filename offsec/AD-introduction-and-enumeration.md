@@ -8,9 +8,43 @@ In this Learning Module, we will focus on the enumeration aspect of Active Direc
 
 ## Table of Contents
 
-- [Introduction to Active Directory](#introduction-to-active-directory)
-- [Active Directory Enumeration Using Manual Tools](#active-directory-enumeration-using-manual-tools)
-- [Enumerating Active Directory Using Automated Tools](#enumerating-active-directory-using-automated-tools)
+### 1. [Introduction to Active Directory](#introduction-to-active-directory)
+- [Core Components and Structure](#core-components)
+- [Privilege Hierarchy](#privilege-hierarchy)
+- [Communication Protocols](#communication-protocols)
+- [Enumeration Goals and Methodology](#enumeration-goals-and-methodology)
+
+### 2. [Manual Enumeration](#manual-enumeration---active-directory---enumeration-using-legacy-windows-tools)
+- **2.1 [Legacy Windows Tools](#manual-enumeration---active-directory---enumeration-using-legacy-windows-tools)**
+  - [`net.exe` for users and groups](#manual-enumeration---active-directory---enumeration-using-legacy-windows-tools)
+  - [RDP connections and Kerberos Double Hop considerations](#manual-enumeration---active-directory---enumeration-using-legacy-windows-tools)
+- **2.2 [PowerShell and .NET Classes](#manual-enumeration---enumerating-active-directory-using-powershell-and-net-classes)**
+  - [LDAP path construction and DirectoryEntry/DirectorySearcher](#manual-enumeration---enumerating-active-directory-using-powershell-and-net-classes)
+  - [Dynamic PDC discovery and DN resolution](#adding-search-functionality-to-our-script)
+  - [Custom enumeration functions](#adding-search-functionality-to-our-script)
+- **2.3 [PowerView Enumeration](#manual-enumeration---ad-enumeration-with-powerview)**
+  - [Core commands: Get-NetDomain, Get-NetUser, Get-NetGroup](#manual-enumeration---ad-enumeration-with-powerview)
+  - [Advanced filtering and strategic analysis](#manual-enumeration---ad-enumeration-with-powerview)
+- **2.4 [Expanding Enumeration Scope](#manual-enumeration---expanding-our-repertoire---enumerating-operating-systems)**
+  - [Operating system enumeration with Get-NetComputer](#manual-enumeration---expanding-our-repertoire---enumerating-operating-systems)
+  - [Permission and session analysis with Find-LocalAdminAccess](#manual-enumeration---expanding-our-repertoire---enumerating-permissions-and-logged-on-users)
+  - [Service Principal Name (SPN) enumeration](#enumerating-service-principal-names-spns)
+- **2.5 [Object Permissions](#enumerating-object-permissions)**
+  - [ACL/ACE analysis with Get-ObjectAcl](#enumerating-object-permissions)
+  - [Permission abuse and exploitation](#enumerating-object-permissions)
+- **2.6 [Domain Share Enumeration](#enumerating-domain-shares)**
+  - [SYSVOL and NETLOGON analysis](#enumerating-domain-shares)
+  - [GPP password extraction](#group-policy-preferences-gpp-password-extraction)
+  - [Custom share investigation](#custom-share-enumeration-and-analysis)
+
+### 3. [Automated Enumeration](#active-directory---automated-enumeration)
+- **3.1 [SharpHound Data Collection](#sharphound-automated-data-collection)**
+  - [Collection methods and configuration](#sharphound-execution)
+  - [Stealth and performance optimization](#output-and-cache-management)
+- **3.2 [BloodHound Analysis](#analyzing-data-using-bloodhound)**
+  - [Neo4j setup and data import](#bloodhound-setup-and-configuration)
+  - [Graph analysis and attack path discovery](#graph-analysis-fundamentals)
+  - [Owned principals and strategic analysis](#owned-principals-management)
 
 ---
 
@@ -2034,303 +2068,46 @@ While manual enumeration provides deep technical understanding and precise contr
 
 ### SharpHound: Automated Data Collection
 
-SharpHound is the data collection component of the BloodHound suite, written in C# and utilizing Windows API functions and LDAP namespace functions for comprehensive domain enumeration. It automates the same techniques used in manual enumeration but at scale and speed.
+SharpHound automates Active Directory enumeration using Windows API functions and LDAP queries. It utilizes the same techniques as manual enumeration (NetWkstaUserEnum, NetSessionEnum, Remote Registry) but at scale and speed.
 
-### SharpHound Technical Foundation
+**Core Functionality:**
+- **C# Implementation**: Uses Windows API and LDAP namespace functions
+- **PowerShell Wrapper**: In-memory execution via reflection
+- **Data Output**: Structured JSON files optimized for BloodHound
 
-**Core Enumeration Methods:**
-- **NetWkstaUserEnum**: Logged-on session enumeration
-- **NetSessionEnum**: Active session discovery
-- **Remote Registry Service**: Registry-based user identification
-- **LDAP Queries**: Object relationship mapping
-- **Windows API Calls**: Native system enumeration
+### SharpHound Execution
 
-**SharpHound Deployment Options:**
-1. **Compiled Executable**: Pre-built C# binary
-2. **PowerShell Script**: In-memory execution via Sharphound.ps1
-3. **Source Compilation**: Custom builds from GitHub repository
-
-### SharpHound PowerShell Implementation
-
-**Script Import and Execution:**
+**Basic Setup:**
 ```powershell
-# Bypass execution policy
-powershell -ep bypass
-
-# Import SharpHound PowerShell script
+# Import PowerShell script
 Import-Module .\Sharphound.ps1
 
-# Verify available commands
-Get-Help Invoke-BloodHound
-```
-
-**Invoke-BloodHound Command Structure:**
-The PowerShell wrapper uses reflection to load the compiled C# ingestor into memory without touching disk, converting PowerShell parameters to equivalent CLI arguments.
-
-### Collection Methods and Parameters
-
-**Primary Collection Methods:**
-- **All**: Comprehensive collection (excludes only local group policies)
-- **Default**: Standard collection (recommended starting point)
-- **DCOnly**: Domain Controller focused enumeration
-- **Group**: Group membership enumeration
-- **LocalAdmin**: Local administrator privilege mapping
-- **Session**: Active session enumeration
-- **LoggedOn**: Currently logged-on user discovery
-- **Trusts**: Domain trust relationships
-- **ACL**: Access Control List enumeration
-- **ObjectProps**: Object property collection
-
-**Advanced Collection Options:**
-- **GPOLocalGroup**: Group Policy local group enumeration
-- **RDP**: Remote Desktop access rights
-- **DCOM**: DCOM object permissions
-- **SPNTargets**: Service Principal Name mapping
-- **PSRemote**: PowerShell remoting capabilities
-- **UserRights**: User rights assignment
-- **CertServices**: Certificate Services enumeration
-
-### Comprehensive Data Collection Example
-
-**Standard SharpHound Execution:**
-```powershell
-# Complete domain enumeration
+# Standard collection
 Invoke-BloodHound -CollectionMethod All -OutputDirectory C:\Users\<username>\Desktop\ -OutputPrefix "<prefix>"
-
-# Example with specific parameters
-Invoke-BloodHound -CollectionMethod All -OutputDirectory C:\Users\stephanie\Desktop\ -OutputPrefix "corp audit"
 ```
 
-**Output Analysis:**
-```
-2024-08-10T20:16:00.7960323-07:00|INFORMATION|Resolved Collection Methods: Group, LocalAdmin, GPOLocalGroup, Session, LoggedOn, Trusts, ACL, Container, RDP, ObjectProps, DCOM, SPNTargets, PSRemote, UserRights, CARegistry, DCRegistry, CertServices
-2024-08-10T20:16:01.8272851-07:00|INFORMATION|Status: 309 objects finished (+309 Infinity)/s -- Using 118 MB RAM
-2024-08-10T20:16:01.8272851-07:00|INFORMATION|Enumeration finished in 00:00:00.7702863
-```
+**Key Collection Methods:**
+- **All**: Comprehensive collection (recommended for complete assessment)
+- **Default**: Standard collection with reduced noise
+- **Session**: Focus on active user sessions
+- **ACL**: Emphasis on permissions and access control
 
-### Advanced SharpHound Configuration
-
-**Stealth and Performance Options:**
+**Stealth Options:**
 ```powershell
-# Stealth collection (reduced noise)
-Invoke-BloodHound -CollectionMethod All -Stealth
-
-# Throttled collection (slower, less detectable)
-Invoke-BloodHound -CollectionMethod All -Throttle 1000 -Jitter 50
-
-# Multi-threaded collection
-Invoke-BloodHound -CollectionMethod All -Threads 10
+# Reduced detection profile
+Invoke-BloodHound -CollectionMethod Default -Stealth -Throttle 1000
 ```
 
-**Domain-Specific Targeting:**
-```powershell
-# Specific domain controller
-Invoke-BloodHound -CollectionMethod All -DomainController <DC_FQDN>
-
-# Cross-domain enumeration
-Invoke-BloodHound -CollectionMethod All -Domain <target_domain>
-
-# Forest-wide collection
-Invoke-BloodHound -CollectionMethod All -SearchForest
-```
-
-**Output Format Control:**
-```powershell
-# Custom output location and naming
-Invoke-BloodHound -CollectionMethod All -OutputDirectory <path> -OutputPrefix <name>
-
-# Disable compression (separate JSON files)
-Invoke-BloodHound -CollectionMethod All -NoZip
-
-# Password-protected archive
-Invoke-BloodHound -CollectionMethod All -ZipPassword <password>
-```
-
-### Collection Method Strategic Selection
-
-**Targeted Collection Examples:**
-```powershell
-# Session-focused enumeration
-Invoke-BloodHound -CollectionMethod Session,LoggedOn
-
-# Permission-focused collection
-Invoke-BloodHound -CollectionMethod ACL,LocalAdmin,ObjectProps
-
-# Group and trust mapping
-Invoke-BloodHound -CollectionMethod Group,Trusts,Container
-
-# Service and privilege enumeration
-Invoke-BloodHound -CollectionMethod SPNTargets,UserRights,PSRemote
-```
-
-### Looped Collection for Dynamic Environments
-
-**Continuous Monitoring Setup:**
-```powershell
-# Loop collection over time period
-Invoke-BloodHound -CollectionMethod Session,LoggedOn -Loop -LoopDuration 01:00:00 -LoopInterval 00:10:00
-
-# Parameters explanation:
-# -Loop: Enable continuous collection
-# -LoopDuration: Total collection time (1 hour)
-# -LoopInterval: Collection frequency (every 10 minutes)
-```
-
-**Loop Collection Benefits:**
-- **Dynamic Session Capture**: Identifies users logging in/out during collection
-- **Privilege Changes**: Captures permission modifications
-- **Service Account Activity**: Monitors service authentication patterns
-- **Temporal Attack Paths**: Reveals time-dependent access opportunities
-
-### SharpHound Output Analysis
+### Output and Cache Management
 
 **Generated Files:**
-```
-├── <prefix>_<timestamp>_BloodHound.zip    # Main data archive
-├── <cache_file>.bin                       # Cache for subsequent runs
-└── SharpHound logs (if enabled)          # Detailed execution logs
-```
+- **ZIP Archive**: Main data collection (`<prefix>_<timestamp>_BloodHound.zip`)
+- **Cache File**: Performance optimization for subsequent runs
 
-**Data File Contents:**
-- **JSON Files**: Structured relationship data
-- **Computer Objects**: Host information and permissions
-- **User Objects**: Account details and group memberships
-- **Group Objects**: Membership hierarchies and nesting
-- **Domain Objects**: Trust relationships and policies
-- **Session Data**: Active authentication mappings
-
-### Cache Management and Performance
-
-**Cache File Purpose:**
-- **Speed Optimization**: Accelerates subsequent collections
-- **Delta Collections**: Identifies changes since last run
-- **Bandwidth Reduction**: Minimizes redundant network queries
-- **Incremental Updates**: Supports looped collection efficiency
-
-**Cache Commands:**
-```powershell
-# Use existing cache
-Invoke-BloodHound -CollectionMethod All -MemCache
-
-# Rebuild cache from scratch
-Invoke-BloodHound -CollectionMethod All -RebuildCache
-
-# Custom cache file location
-Invoke-BloodHound -CollectionMethod All -CacheName <custom_name>
-```
-
-### OpSec Considerations for SharpHound
-
-**Network Traffic Characteristics:**
-- **High LDAP Query Volume**: Extensive directory service requests
-- **Registry Access Patterns**: Remote registry enumeration signatures
-- **Session Enumeration**: NetSessionEnum API calls across hosts
-- **Group Membership Queries**: Bulk user and group relationship requests
-
-**Detection Reduction Strategies:**
-```powershell
-# Reduced noise collection
-Invoke-BloodHound -CollectionMethod Default -Stealth -Throttle 2000
-
-# Skip noisy collection methods
-Invoke-BloodHound -CollectionMethod Group,ACL,ObjectProps -SkipRegistryLoggedOn
-
-# Distributed collection timing
-Invoke-BloodHound -CollectionMethod Session -Jitter 25 -Threads 5
-```
-
-### SharpHound Error Handling and Troubleshooting
-
-**Common Collection Issues:**
-- **Insufficient Privileges**: Limited data collection scope
-- **Network Connectivity**: Unreachable domain controllers or hosts
-- **Firewall Restrictions**: Blocked enumeration ports (445, 135, 139)
-- **Authentication Failures**: Invalid credentials or expired tokens
-
-**Debugging and Verbosity:**
-```powershell
-# Increased logging detail
-Invoke-BloodHound -CollectionMethod All -Verbosity 3
-
-# Status interval reporting
-Invoke-BloodHound -CollectionMethod All -StatusInterval 30000
-
-# Track specific operations
-Invoke-BloodHound -CollectionMethod All -TrackComputerCalls
-```
-
-### SharpHound Collection Workflow
-
-```mermaid
-flowchart TD
-    Start["SharpHound Collection"] --> Import["Import-Module Sharphound.ps1"]
-    Import --> Method["Select Collection Method"]
-    
-    Method --> All["All Methods"]
-    Method --> Targeted["Targeted Collection"]
-    Method --> Stealth["Stealth Mode"]
-    
-    All --> Execute["Invoke-BloodHound"]
-    Targeted --> Execute
-    Stealth --> Execute
-    
-    Execute --> LDAP["LDAP Enumeration"]
-    Execute --> API["Windows API Calls"]
-    Execute --> Registry["Registry Queries"]
-    
-    LDAP --> Objects["Object Discovery"]
-    API --> Sessions["Session Enumeration"]
-    Registry --> Users["User Identification"]
-    
-    Objects --> JSON["JSON Data Generation"]
-    Sessions --> JSON
-    Users --> JSON
-    
-    JSON --> Zip["Archive Creation"]
-    Zip --> Transfer["Transfer to Analysis Host"]
-    
-    Transfer --> BloodHound["BloodHound Analysis"]
-    
-    style Start fill:#e1f5fe
-    style Execute fill:#fff3e0
-    style BloodHound fill:#c8e6c9
-```
-
-### Collection Method Reference
-
-**Comprehensive Method List:**
-- **Group**: Group membership and nesting relationships
-- **LocalAdmin**: Local administrator privilege mapping
-- **GPOLocalGroup**: Group Policy-defined local group memberships
-- **Session**: Active user sessions on computers
-- **LoggedOn**: Currently logged-on users via registry
-- **Trusts**: Domain and forest trust relationships
-- **ACL**: Access Control Lists and permissions
-- **Container**: Organizational Unit and container structures
-- **RDP**: Remote Desktop Protocol access rights
-- **ObjectProps**: Extended object properties and attributes
-- **DCOM**: Distributed COM object permissions
-- **SPNTargets**: Service Principal Name mappings
-- **PSRemote**: PowerShell remoting capabilities
-- **UserRights**: User rights assignments and privileges
-- **CARegistry**: Certificate Authority registry information
-- **DCRegistry**: Domain Controller registry enumeration
-- **CertServices**: Active Directory Certificate Services
-
-### SharpHound Best Practices
-
-**Collection Strategy:**
-1. **Initial Reconnaissance**: Start with Default or Group methods
-2. **Privilege Mapping**: Add LocalAdmin and ACL collection
-3. **Session Intelligence**: Include Session and LoggedOn methods
-4. **Complete Assessment**: Use All method for comprehensive coverage
-5. **Continuous Monitoring**: Implement Loop collection for dynamic environments
-
-**Performance Optimization:**
-- **Use Caching**: Leverage cache files for repeated collections
-- **Throttle Appropriately**: Balance speed with stealth requirements
-- **Target Specific Methods**: Avoid unnecessary collection overhead
-- **Monitor Resource Usage**: Track memory and network utilization
+**Performance Features:**
+- **Caching**: Speeds up repeated collections
+- **Loop Collection**: Continuous monitoring for dynamic environments
+- **Throttling**: Balances speed with stealth requirements
 
 SharpHound automates comprehensive Active Directory enumeration through systematic LDAP queries, Windows API calls, and registry analysis, providing structured data optimized for BloodHound's graph-based attack path analysis.
 
@@ -2338,339 +2115,111 @@ SharpHound automates comprehensive Active Directory enumeration through systemat
 
 ## Analyzing Data using BloodHound
 
-BloodHound transforms raw Active Directory enumeration data into visual graph representations that reveal complex attack paths through node and edge relationships. This graph-based analysis enables rapid identification of privilege escalation routes and lateral movement opportunities that manual analysis might miss.
+BloodHound transforms raw Active Directory enumeration data into visual graph representations that reveal complex attack paths through node and edge relationships. This graph-based analysis enables rapid identification of privilege escalation routes and lateral movement opportunities.
 
-### BloodHound Technical Architecture
+### BloodHound Setup and Configuration
 
-**Core Components:**
-- **Neo4j Database**: Open-source graph database (NoSQL) backend
-- **BloodHound GUI**: Graph visualization and analysis interface
-- **Node-Edge Model**: Objects (nodes) connected by relationships (edges)
-- **Graph Algorithms**: Automated shortest path calculations
-
-**Data Structure:**
-- **Nodes**: Active Directory objects (users, computers, groups, domains)
-- **Edges**: Relationships between objects (AdminTo, MemberOf, HasSession)
-- **Properties**: Object attributes and metadata
-- **Constraints**: Security boundaries and access limitations
-
-### Neo4j Database Setup and Configuration
-
-**Service Initialization:**
+**Neo4j Database Setup:**
 ```bash
 # Start Neo4j service
 sudo neo4j start
 
-# Verify service status
-sudo neo4j status
-
-# Access web interface
-# URL: http://localhost:7474
-# Default credentials: neo4j/neo4j
+# Access web interface: http://localhost:7474
+# Default credentials: neo4j/neo4j (change on first login)
 ```
 
-**Initial Configuration:**
-```
-Directories in use:
-home:         /usr/share/neo4j
-config:       /usr/share/neo4j/conf
-logs:         /usr/share/neo4j/logs
-plugins:      /usr/share/neo4j/plugins
-import:       /usr/share/neo4j/import
-data:         /usr/share/neo4j/data
-```
-
-**Database Authentication:**
-1. **Initial Login**: Default credentials (neo4j/neo4j)
-2. **Password Change**: Mandatory on first access
-3. **BloodHound Connection**: Uses Neo4j credentials
-4. **Database Selection**: Default database for BloodHound
-
-### BloodHound Application Launch and Setup
-
-**Application Startup:**
+**BloodHound Launch:**
 ```bash
-# Launch BloodHound
+# Start BloodHound application
 bloodhound
 
-# Alternative GUI launch methods
-bloodhound --no-sandbox
+# Connect using Neo4j credentials
 ```
 
-**Authentication Process:**
-- **Database Connection**: Auto-detection of Neo4j service
-- **Credential Entry**: Neo4j username and password
-- **Connection Verification**: Green checkmark indicates success
-- **Initial Interface**: Empty database until data import
-
-### Data Import and Processing
-
-**Data Transfer Methods:**
-1. **File Transfer**: Move SharpHound ZIP from Windows to Kali
-2. **Upload Function**: Right-side GUI upload button
-3. **Drag-and-Drop**: Direct file import to main window
-4. **Progress Monitoring**: Upload progress bar indication
+### Data Import and Analysis
 
 **Import Process:**
-```
-File Structure:
-├── <prefix>_<timestamp>_BloodHound.zip
-├── computers.json
-├── users.json
-├── groups.json
-├── domains.json
-└── gpos.json (if applicable)
-```
+1. Transfer SharpHound ZIP file to analysis host
+2. Use BloodHound upload function or drag-and-drop
+3. Verify import via Database Info (hamburger menu)
 
-**Post-Import Verification:**
-- **Database Info**: Hamburger menu → Database statistics
-- **Object Counts**: Users, groups, computers, sessions
-- **Refresh Function**: Update database statistics if needed
+**Database Statistics Example:**
+- Users: 10, Groups: 57, Computers: 6, Sessions: 5
+- ACLs: Multiple relationships, varies by domain size
 
-### Database Information Analysis
+### Graph Analysis Fundamentals
 
-**Statistical Overview:**
-```
-Database Statistics Example:
-- Users: 10
-- Groups: 57  
-- Computers: 6
-- Sessions: 5
-- ACLs: Multiple entries
-- Relationships: Varies by domain size
-```
+**Node Types:**
+- **Users**: Circular nodes (blue) - domain user accounts
+- **Computers**: Computer-shaped nodes (red) - domain-joined systems
+- **Groups**: Pentagon-shaped nodes (green) - security groups
+- **Domains**: Domain-shaped nodes (yellow) - domain objects
 
-**Key Metrics Understanding:**
-- **Sessions**: Active user authentication mappings
-- **ACLs**: Access Control List relationships
-- **Groups**: Nested group memberships and hierarchies
-- **Computers**: Host objects and their properties
-
-### BloodHound Interface Navigation
-
-**Main Interface Components:**
-- **Search Bar**: Object lookup and targeting
-- **Graph Canvas**: Visual relationship display
-- **Node Info Panel**: Detailed object information
-- **Analysis Tab**: Pre-built queries and analytics
-- **Settings**: Display configuration and preferences
-
-**Display Configuration:**
-```
-Settings → Node Label Display → Always Display
-- Shows object names permanently
-- Improves graph readability
-- Reduces hover requirements
-```
-
-### Pre-Built Analysis Queries
-
-**Domain Information Queries:**
-- **Find all Domain Admins**: Identifies privileged users
-- **Find Shortest Paths to Domain Admins**: Attack path discovery
-- **Find Principals with DCSync Rights**: Dangerous permissions
-- **Find Computers where Domain Users are Local Admin**: Widespread access
-
-**Pathfinding Queries:**
-- **Shortest Paths to Domain Admins from Owned Principals**: Targeted attack paths
-- **Shortest Paths to High Value Targets**: Multiple privilege escalation routes
-- **Find Shortest Paths to Domain Admins from Kerberoastable Users**: Service account exploitation
-
-**Session Analysis:**
-- **Find Computers with Unsupported Operating Systems**: Legacy system identification
-- **Find Shortest Paths to Unconstrained Delegation Systems**: Dangerous configurations
-- **List all Kerberoastable Accounts**: Service account enumeration
-
-### Graph Analysis and Interpretation
-
-**Node Types and Representations:**
-- **Users**: Circular nodes (blue)
-- **Computers**: Computer-shaped nodes (red)
-- **Groups**: Pentagon-shaped nodes (green)
-- **Domains**: Domain-shaped nodes (yellow)
-
-**Edge Types and Meanings:**
+**Critical Edge Types:**
 - **AdminTo**: Administrative privileges on computer
 - **MemberOf**: Group membership relationship
 - **HasSession**: Active authentication session
 - **CanRDP**: Remote Desktop access rights
-- **CanPSRemote**: PowerShell remoting capabilities
 - **GenericAll**: Complete control over object
 
-### Attack Path Analysis Methodology
+### Pre-Built Analysis Queries
 
-**Shortest Path to Domain Admins Analysis:**
-```mermaid
-graph LR
-    User[stephanie] -->|AdminTo| Computer[CLIENT74]
-    Computer -->|HasSession| Admin[jeffadmin]
-    Admin -->|MemberOf| DA[Domain Admins]
-    
-    style User fill:#e3f2fd
-    style Admin fill:#ffcdd2
-    style DA fill:#c8e6c9
+**Essential Queries:**
+- **Find all Domain Admins**: Identifies privileged users
+- **Find Shortest Paths to Domain Admins**: Primary attack path discovery
+- **Shortest Paths from Owned Principals**: Targeted analysis from compromised accounts
+
+**Attack Path Analysis Example:**
 ```
+stephanie → [AdminTo] → CLIENT74 → [HasSession] → jeffadmin → [MemberOf] → Domain Admins
 
-**Path Interpretation:**
-1. **stephanie** has administrative privileges on **CLIENT74**
-2. **jeffadmin** has an active session on **CLIENT74**
-3. **jeffadmin** is a member of **Domain Admins**
-4. **Attack Vector**: Credential theft from CLIENT74 → Domain Admin access
+Attack Vector: Credential theft from CLIENT74 leads to Domain Admin access
+```
 
 ### Owned Principals Management
 
-**Marking Objects as Owned:**
-```
-Process:
-1. Search for target object
-2. Right-click on node
-3. Select "Mark User/Computer as Owned"
-4. Skull icon indicates owned status
-```
+**Marking Process:**
+1. Search for compromised object
+2. Right-click node → "Mark User/Computer as Owned"
+3. Skull icon indicates owned status
 
-**Strategic Owned Principal Selection:**
-- **Current User Account**: Known compromised credentials
-- **Current Computer**: Host with established access
-- **Compromised Service Accounts**: Obtained through attacks
-- **Privilege Escalation Targets**: Systems with local admin access
+**Strategic Benefits:**
+- Focus analysis on realistic attack paths
+- Evaluate actual compromise impact
+- Identify next-step opportunities
 
-**Owned Principal Benefits:**
-- **Targeted Analysis**: Focus on realistic attack paths
-- **Risk Assessment**: Evaluate actual compromise impact
-- **Attack Planning**: Identify next-step opportunities
-- **Scenario Testing**: "What if" compromise analysis
+### Custom Analysis with Cypher Queries
 
-### Advanced Graph Analysis Techniques
-
-**Multi-Hop Attack Paths:**
-```
-Example Path:
-stephanie → CLIENT75 → jeffadmin → CLIENT74 → Domain Admins
-
-Analysis:
-1. stephanie controls CLIENT75
-2. jeffadmin has session on CLIENT75
-3. Credential theft opportunity
-4. jeffadmin access leads to CLIENT74
-5. CLIENT74 compromise → Domain Admin rights
-```
-
-**Help and Documentation Access:**
-- **Right-click Edge**: Access relationship help
-- **Abuse Tab**: Attack methodology information
-- **OpSec Tab**: Detection considerations
-- **References**: Supporting documentation links
-
-### BloodHound Query Customization
-
-**Custom Cypher Queries:**
+**Useful Custom Queries:**
 ```cypher
 # Find users with AdminTo rights
 MATCH (u:User)-[:AdminTo]->(c:Computer) RETURN u,c
 
-# Find computers where domain users can RDP
-MATCH (g:Group {name:'DOMAIN USERS@DOMAIN.COM'})-[:CanRDP]->(c:Computer) RETURN g,c
-
 # Find shortest path from specific user
-MATCH p=shortestPath((u:User {name:'STEPHANIE@CORP.COM'})-[*1..]->(g:Group {name:'DOMAIN ADMINS@CORP.COM'})) RETURN p
+MATCH p=shortestPath((u:User {name:'USER@DOMAIN.COM'})-[*1..]->(g:Group {name:'DOMAIN ADMINS@DOMAIN.COM'})) RETURN p
 ```
 
-**Query Development Process:**
-1. **Identify Objective**: Define analysis goal
-2. **Node Selection**: Choose starting and ending objects
-3. **Relationship Filtering**: Specify edge types
-4. **Path Constraints**: Set hop limits and conditions
-5. **Result Visualization**: Format output for analysis
+### Attack Path Validation
 
-### Attack Path Validation and Exploitation
-
-**Path Verification Steps:**
+**Verification Steps:**
 1. **Technical Feasibility**: Confirm attack methods exist
-2. **Access Requirements**: Validate prerequisite privileges
+2. **Access Requirements**: Validate prerequisite privileges  
 3. **Detection Risk**: Assess OpSec implications
 4. **Tool Availability**: Ensure attack tools accessible
-
-**Common Attack Patterns:**
-- **Credential Theft**: HasSession relationships
-- **Privilege Escalation**: AdminTo edges
-- **Lateral Movement**: Multiple computer access paths
-- **Service Account Abuse**: Kerberoastable targets
-
-### BloodHound Performance and Optimization
-
-**Large Dataset Handling:**
-- **Database Indexing**: Automatic Neo4j optimization
-- **Query Performance**: Efficient pathfinding algorithms
-- **Memory Management**: Proper resource allocation
-- **Display Filtering**: Limit visual complexity
-
-**Network Traffic Considerations:**
-- **Data Collection Impact**: High LDAP query volume
-- **Detection Signatures**: Automated enumeration patterns
-- **Timing Controls**: SharpHound throttling options
-- **Stealth Approaches**: Reduced collection methods
-
-### BloodHound Analysis Workflow
-
-```mermaid
-flowchart TD
-    Start["BloodHound Analysis"] --> Setup["Neo4j Setup"]
-    Setup --> Launch["Launch BloodHound"]
-    Launch --> Import["Import SharpHound Data"]
-    
-    Import --> Overview["Database Overview"]
-    Overview --> Queries["Pre-built Queries"]
-    
-    Queries --> DomainAdmins["Find Domain Admins"]
-    Queries --> ShortestPaths["Shortest Paths"]
-    Queries --> CustomQuery["Custom Cypher"]
-    
-    DomainAdmins --> MarkOwned["Mark Owned Principals"]
-    ShortestPaths --> MarkOwned
-    CustomQuery --> MarkOwned
-    
-    MarkOwned --> TargetedAnalysis["Targeted Path Analysis"]
-    TargetedAnalysis --> AttackPlan["Attack Path Planning"]
-    
-    AttackPlan --> Validation["Path Validation"]
-    Validation --> Exploitation["Attack Execution"]
-    
-    style Start fill:#e1f5fe
-    style MarkOwned fill:#fff3e0
-    style AttackPlan fill:#c8e6c9
-    style Exploitation fill:#ffcdd2
-```
-
-### Strategic Analysis Recommendations
-
-**Progressive Analysis Approach:**
-1. **Domain Overview**: Understand overall structure and privilege distribution
-2. **High-Value Targets**: Identify Domain Admins and privileged groups
-3. **Attack Path Discovery**: Find shortest routes to objectives
-4. **Owned Principal Analysis**: Focus on realistic compromise scenarios
-5. **Multi-Path Validation**: Verify multiple attack vectors
-6. **Risk Assessment**: Evaluate detection likelihood and impact
-
-**Enterprise Environment Considerations:**
-- **Scale Challenges**: Thousands of users and computers
-- **Complex Relationships**: Nested groups and inheritance
-- **Multiple Domains**: Forest-wide trust relationships
-- **Service Dependencies**: Cross-service authentication patterns
 
 ### BloodHound Best Practices
 
 **Analysis Methodology:**
-- **Start Broad**: Use "Find all Domain Admins" for overview
-- **Focus Owned**: Mark realistic compromise starting points
-- **Validate Paths**: Verify attack feasibility before execution
-- **Document Findings**: Record discovered attack paths
-- **Regular Updates**: Re-run collection to capture changes
+1. **Domain Overview**: Start with "Find all Domain Admins"
+2. **Mark Owned Principals**: Identify realistic starting points
+3. **Path Discovery**: Use shortest path queries
+4. **Validate Attacks**: Verify feasibility before execution
+5. **Document Findings**: Record discovered attack paths
 
 **OpSec Considerations:**
-- **Data Collection Noise**: SharpHound generates significant traffic
-- **Analysis Security**: Secure BloodHound database access
-- **Path Documentation**: Maintain attack methodology records
-- **Tool Detection**: Monitor for BloodHound deployment signatures
+- SharpHound generates significant network traffic
+- Secure BloodHound database access
+- Monitor for automated enumeration signatures
 
 BloodHound transforms complex Active Directory relationships into actionable attack intelligence through graph-based visualization, enabling rapid identification of privilege escalation paths and lateral movement opportunities that manual enumeration cannot efficiently reveal.
 
