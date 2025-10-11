@@ -61,6 +61,11 @@ smbclient -N -L //<ip>
 enum4linux -a <ip>
 ```
 
+## Username convention
+```bash
+kerbrute userenum -d cyberhawks.lab --dc <dc-ip> users.txt
+```
+
 ## Password Spraying
 ```bash
 # Download statistically likely usernames
