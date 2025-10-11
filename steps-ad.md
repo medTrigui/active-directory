@@ -10,6 +10,9 @@ dig +short SRV _ldap._tcp.dc._msdcs.example.com
 
 # Get DC IP
 dig +short dc1.example.com
+
+# Get other DCs
+dnsrecon -d <domain-name> -t srv
 ```
 
 ## Finding Domain Name
