@@ -10,6 +10,9 @@ dig +short SRV _ldap._tcp.dc._msdcs.example.com
 
 # Get DC IP
 dig +short dc1.example.com
+
+# Get other DCs
+dnsrecon -d <domain-name> -t srv
 ```
 
 ## Finding Domain Name
@@ -56,6 +59,11 @@ smbclient -N -L //<ip>
 
 # Enum4linux comprehensive scan
 enum4linux -a <ip>
+```
+
+## Username convention
+```bash
+kerbrute userenum -d cyberhawks.lab --dc <dc-ip> users.txt
 ```
 
 ## Password Spraying
